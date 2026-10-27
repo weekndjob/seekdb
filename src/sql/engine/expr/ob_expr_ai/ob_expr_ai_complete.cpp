@@ -121,7 +121,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
       bool is_null = false;
       if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, PROMPT_IDX, j_base, is_null))) {
         LOG_WARN("get_json_doc failed", K(ret));
-      } else if (j_base->json_type() != ObJsonNodeType::J_OBJECT) {
+      } else if (OB_ISNULL(j_base) || j_base->json_type() != ObJsonNodeType::J_OBJECT) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("j_base is not json object", K(ret));
       } else if (OB_FALSE_IT(prompt_object = static_cast<ObJsonObject *>(j_base))) {
@@ -130,10 +130,6 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
         LOG_WARN("prompt is not valid", K(ret));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "prompt is not valid");
         res.set_null();
-      } else if (!ObAIFuncJsonUtils::ob_is_json_array_all_str(static_cast<ObJsonArray *>(prompt_object->get_value(ObAIFuncPromptObjectUtils::prompt_args_key)))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("prompt object is not support", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "prompt object is not support");
       } else if (OB_FAIL(ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(temp_allocator, prompt_object, prompt))) {
         LOG_WARN("fail to replace all str args in template", K(ret));
       }
@@ -142,8 +138,21 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(arg_config)) {
-      if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *arg_config, expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), config_str))) {
+    } else if (OB_NOT_NULL(arg_config) && !arg_config->is_null()) {
+      if (expr.args_[2]->datum_meta_.type_ == ObJsonType) {
+        ObIJsonBase *config_base = nullptr;
+        bool is_null = false;
+        if (OB_FAIL(ObJsonExprHelper::get_json_doc(
+                expr, ctx, temp_allocator, CONFIG_IDX, config_base, is_null))) {
+          LOG_WARN("failed to read JSON config", K(ret));
+        } else if (is_null || OB_ISNULL(config_base) ||
+                   config_base->json_type() != ObJsonNodeType::J_OBJECT) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("JSON config must be an object", K(ret));
+        } else {
+          config = static_cast<ObJsonObject *>(config_base);
+        }
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *arg_config, expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), config_str))) {
         LOG_WARN("fail to get real string data", K(ret));
       } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_object_form_str(temp_allocator, config_str, config))) {
         LOG_WARN("fail to get json object", K(ret));

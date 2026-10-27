@@ -287,6 +287,93 @@ TEST_F(ObOpenAIUtilsTest, test_embedding_parse_output_empty)
 }
 
 
+TEST_F(ObOpenAIUtilsTest, test_embedding_reorders_indices)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObString response(R"({"data":[{"index":1,"embedding":[3,4]},{"index":0,"embedding":[1,2]}]})");
+    ObIJsonBase *json = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(
+        &allocator, response, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, json));
+    ObOpenAIUtils::ObOpenAIEmbed embedding;
+    ObIJsonBase *result = nullptr;
+    ASSERT_EQ(OB_SUCCESS, embedding.parse_output(allocator, static_cast<ObJsonObject *>(json), result));
+    ObJsonArray *array = static_cast<ObJsonArray *>(result);
+    ASSERT_EQ(2, array->element_count());
+    ObStringBuffer first(&allocator);
+    ObStringBuffer second(&allocator);
+    ASSERT_EQ(OB_SUCCESS, array->get_value(0)->print(first, 0));
+    ASSERT_EQ(OB_SUCCESS, array->get_value(1)->print(second, 0));
+    ASSERT_EQ(ObString("[1, 2]"), first.string());
+    ASSERT_EQ(ObString("[3, 4]"), second.string());
+}
+
+TEST_F(ObOpenAIUtilsTest, test_embedding_rejects_duplicate_index)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObString response(R"({"data":[{"index":0,"embedding":[1]},{"index":0,"embedding":[2]}]})");
+    ObIJsonBase *json = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(
+        &allocator, response, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, json));
+    ObOpenAIUtils::ObOpenAIEmbed embedding;
+    ObIJsonBase *result = nullptr;
+    ASSERT_EQ(OB_ERR_UNEXPECTED,
+              embedding.parse_output(allocator, static_cast<ObJsonObject *>(json), result));
+}
+
+TEST_F(ObOpenAIUtilsTest, test_ollama_native_completion)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObOllamaUtils::ObOllamaComplete completion;
+    ObArray<ObString> headers;
+    ObString empty_key;
+    ASSERT_EQ(OB_SUCCESS, completion.get_header(allocator, empty_key, headers));
+    ASSERT_EQ(1, headers.count());
+    ObString model("llama");
+    ObString system;
+    ObString prompt("hello");
+    ObJsonObject *body = nullptr;
+    ASSERT_EQ(OB_SUCCESS, completion.get_body(allocator, model, system, prompt, nullptr, body));
+    ObJsonNode *stream = body->get_value("stream");
+    ASSERT_TRUE(stream != nullptr);
+    ASSERT_EQ(ObJsonNodeType::J_BOOLEAN, stream->json_type());
+}
+
+TEST_F(ObOpenAIUtilsTest, test_ollama_native_embedding)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObOllamaUtils::ObOllamaEmbed embedding;
+    ObString model("embed-model");
+    ObArray<ObString> inputs;
+    ASSERT_EQ(OB_SUCCESS, inputs.push_back(ObString("first")));
+    ASSERT_EQ(OB_SUCCESS, inputs.push_back(ObString("second")));
+    ObJsonObject *body = nullptr;
+    ASSERT_EQ(OB_SUCCESS, embedding.get_body(allocator, model, inputs, nullptr, body));
+    ASSERT_EQ(ObJsonNodeType::J_ARRAY, body->get_value("input")->json_type());
+
+    ObString response(R"({"embeddings":[[1,2],[3,4]]})");
+    ObIJsonBase *json = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(
+        &allocator, response, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, json));
+    ObIJsonBase *result = nullptr;
+    ASSERT_EQ(OB_SUCCESS, embedding.parse_output(
+        allocator, static_cast<ObJsonObject *>(json), result));
+    ASSERT_EQ(2, static_cast<ObJsonArray *>(result)->element_count());
+
+    ObString invalid(R"({"embeddings":[[1,2],[3]]})");
+    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(
+        &allocator, invalid, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, json));
+    ASSERT_EQ(OB_ERR_UNEXPECTED, embedding.parse_output(
+        allocator, static_cast<ObJsonObject *>(json), result));
+
+    ObString legacy(R"({"embedding":[5,6]})");
+    ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(
+        &allocator, legacy, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, json));
+    ASSERT_EQ(OB_SUCCESS, embedding.parse_output(
+        allocator, static_cast<ObJsonObject *>(json), result));
+    ASSERT_EQ(1, static_cast<ObJsonArray *>(result)->element_count());
+}
+
+
 int main(int argc, char **argv)
 {
     ::testing::InitGoogleTest(&argc,argv);

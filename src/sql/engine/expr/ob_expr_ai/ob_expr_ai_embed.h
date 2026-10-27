@@ -52,8 +52,10 @@ private:
                               ObEvalCtx &ctx,
                               const ObBitVector &skip,
                               const EvalBound &bound,
+                              ObIAllocator &allocator,
                               ObString &model_id,
                               ObArray<ObString> &contents,
+                              ObArray<int64_t> &row_indexes,
                               int64_t &dim);
   static int pack_json_array_to_res_vector(const ObExpr &expr,
                                           ObEvalCtx &ctx,

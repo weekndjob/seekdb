@@ -177,7 +177,8 @@ int ObAIFuncClient::send_post(ObJsonObject *data, ObJsonObject *&response)
         ret = OB_CURL_ERROR;
         char http_code_str[1024];
         ObString err_msg = response_buf.string();
-        snprintf(http_code_str, sizeof(http_code_str), "http status code: %ld, error message: %s", http_code, err_msg.ptr());
+        snprintf(http_code_str, sizeof(http_code_str), "http status code: %ld, error message: %.*s",
+                 http_code, static_cast<int>(err_msg.length()), err_msg.ptr());
         ObString ob_http_code_str(http_code_str);
         LOG_WARN("unexpected http status code", K(ret), K(http_code), K(err_msg));
         FORWARD_USER_ERROR(ret, http_code_str);
@@ -190,6 +191,9 @@ int ObAIFuncClient::send_post(ObJsonObject *data, ObJsonObject *&response)
               ObJsonInType::JSON_TREE, j_tree))) {
           ret = OB_ERR_INVALID_JSON_TEXT;
           LOG_WARN("fail to parse http_response", K(ret));
+        } else if (OB_ISNULL(j_tree) || j_tree->json_type() != ObJsonNodeType::J_OBJECT) {
+          ret = OB_ERR_INVALID_JSON_TEXT;
+          LOG_WARN("AI response must be a JSON object", K(ret));
         } else {
           response = static_cast<ObJsonObject *>(j_tree);
         }
@@ -416,6 +420,9 @@ int ObAIFuncClient::get_batch_result(ObArray<ObJsonObject *> &responses)
               ObJsonInType::JSON_TREE, j_tree))) {
         ret = OB_ERR_INVALID_JSON_TEXT;
         LOG_WARN("fail to parse http_response", K(ret), K(response_str), K(i));
+      } else if (OB_ISNULL(j_tree) || j_tree->json_type() != ObJsonNodeType::J_OBJECT) {
+        ret = OB_ERR_INVALID_JSON_TEXT;
+        LOG_WARN("AI response must be a JSON object", K(ret), K(i));
       } else if (OB_FAIL(responses.push_back(static_cast<ObJsonObject *>(j_tree)))) {
         LOG_WARN("failed to append response", K(ret), K(i));
       }

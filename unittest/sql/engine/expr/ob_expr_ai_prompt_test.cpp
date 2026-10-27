@@ -86,6 +86,30 @@ TEST_F(ObAIPromptTest, test_replace_all_str_args_in_template)
 }
 
 
+TEST_F(ObAIPromptTest, test_nested_json_and_repeated_placeholders)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString raw_str(R"({"template":"{{0}} {0} {0} {1} {2}","args":["中文",{"template":"<{0}>","args":["nested"]},[1,2]]})");
+  ObJsonObject *prompt = nullptr;
+  ObString result;
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncJsonUtils::get_json_object_form_str(allocator, raw_str, prompt));
+  ASSERT_TRUE(ObAIFuncPromptObjectUtils::is_valid_prompt_object(prompt));
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(allocator, prompt, result));
+  ASSERT_EQ(ObString("{0} 中文 中文 <nested> [1, 2]"), result);
+}
+
+TEST_F(ObAIPromptTest, test_invalid_placeholder)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString raw_str(R"({"template":"{2}","args":["only one"]})");
+  ObJsonObject *prompt = nullptr;
+  ObString result;
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncJsonUtils::get_json_object_form_str(allocator, raw_str, prompt));
+  ASSERT_EQ(OB_INVALID_ARGUMENT,
+            ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(allocator, prompt, result));
+}
+
+
 int main(int argc, char **argv)
 {
     ::testing::InitGoogleTest(&argc,argv);
