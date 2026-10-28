@@ -134,3 +134,43 @@ TEST_F(AIPromptTest, recursion_limit_rejects_excessively_nested_prompts)
   EXPECT_EQ(OB_INVALID_ARGUMENT, ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(
       allocator_, object, result));
 }
+
+TEST_F(AIPromptTest, completion_rejects_missing_empty_or_non_string_content)
+{
+  ObOpenAIUtils::ObOpenAIComplete provider;
+  const char *invalid[] = {
+    R"({})", R"({"choices":[]})",
+    R"({"choices":[{"message":{"content":null}}]})",
+    R"({"choices":[{"message":{"content":123}}]})",
+    R"({"choices":[{"message":{"content":""}}]})"
+  };
+  for (const char *json : invalid) {
+    ObIJsonBase *result = nullptr;
+    EXPECT_EQ(OB_INVALID_DATA, provider.parse_output(allocator_, parse(json), result)) << json;
+  }
+  ObIJsonBase *result = nullptr;
+  ASSERT_EQ(OB_SUCCESS, provider.parse_output(allocator_,
+      parse(R"({"choices":[{"message":{"content":"answer"}}]})"), result));
+  ASSERT_NE(nullptr, result);
+  EXPECT_EQ(ObJsonNodeType::J_STRING, result->json_type());
+  EXPECT_EQ("answer", std::string(static_cast<ObJsonString *>(result)->get_str().ptr(),
+                                  static_cast<ObJsonString *>(result)->get_str().length()));
+}
+
+TEST_F(AIPromptTest, completion_forwards_configuration_fields)
+{
+  ObOpenAIUtils::ObOpenAIComplete provider;
+  ObString model = ObString::make_string("example-model");
+  ObString system;
+  ObString content = ObString::make_string("question");
+  ObJsonObject *config = parse(R"({"temperature":0.2,"max_tokens":16})");
+  ObJsonObject *body = nullptr;
+  ASSERT_EQ(OB_SUCCESS, provider.get_body(allocator_, model, system, content, config, body));
+  ASSERT_NE(nullptr, body);
+  ObString rendered;
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncJsonUtils::print_json_to_str(allocator_, body, rendered));
+  const std::string json(rendered.ptr(), rendered.length());
+  EXPECT_NE(std::string::npos, json.find("\"temperature\": 0.2"));
+  EXPECT_NE(std::string::npos, json.find("\"max_tokens\": 16"));
+  EXPECT_NE(std::string::npos, json.find("\"question\""));
+}
