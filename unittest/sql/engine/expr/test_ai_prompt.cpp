@@ -174,3 +174,24 @@ TEST_F(AIPromptTest, completion_forwards_configuration_fields)
   EXPECT_NE(std::string::npos, json.find("\"max_tokens\": 16"));
   EXPECT_NE(std::string::npos, json.find("\"question\""));
 }
+
+TEST_F(AIPromptTest, embedding_response_maps_indices_and_rejects_invalid_shapes)
+{
+  ObOpenAIUtils::ObOpenAIEmbed provider;
+  ObIJsonBase *result = nullptr;
+  ASSERT_EQ(OB_SUCCESS, provider.parse_output(allocator_,
+      parse(R"({"data":[{"index":1,"embedding":[3,4]},{"index":0,"embedding":[1,2]}]})"), result));
+  ObString rendered;
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncJsonUtils::print_json_to_str(allocator_, result, rendered));
+  EXPECT_EQ("[[1, 2], [3, 4]]", std::string(rendered.ptr(), rendered.length()));
+
+  const char *invalid[] = {
+    R"({"data":{}})", R"({"data":[{"index":0,"embedding":[1]},{"index":0,"embedding":[2]}]})",
+    R"({"data":[{"index":1,"embedding":[1]}]})", R"({"data":[{"embedding":[1]}]})",
+    R"({"data":[{"index":-1,"embedding":[1]}]})", R"({"data":[{"index":0,"embedding":"bad"}]})"
+  };
+  for (const char *json : invalid) {
+    result = nullptr;
+    EXPECT_EQ(OB_INVALID_DATA, provider.parse_output(allocator_, parse(json), result)) << json;
+  }
+}
