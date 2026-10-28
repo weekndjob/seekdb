@@ -195,3 +195,39 @@ TEST_F(AIPromptTest, embedding_response_maps_indices_and_rejects_invalid_shapes)
     EXPECT_EQ(OB_INVALID_DATA, provider.parse_output(allocator_, parse(json), result)) << json;
   }
 }
+
+TEST_F(AIPromptTest, ollama_endpoint_and_native_completion_protocol)
+{
+  oceanbase::share::ObAiModelEndpointInfo endpoint;
+  ObString name = ObString::make_string("local_endpoint");
+  ASSERT_EQ(OB_SUCCESS, endpoint.parse_from_json_base(allocator_, name,
+      *parse(R"({"scope":"all","ai_model_name":"m","url":"http://127.0.0.1:1/api/generate","access_key":"","provider":"Ollama"})")));
+  ObString key;
+  ASSERT_EQ(OB_SUCCESS, endpoint.get_unencrypted_access_key(allocator_, key));
+  EXPECT_TRUE(key.empty());
+  ObAIFuncIComplete *provider = nullptr;
+  ObString provider_name = ObString::make_string("oLlAmA");
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncUtils::get_complete_provider(allocator_, provider_name, provider));
+  ASSERT_NE(nullptr, provider);
+  ObAIFuncIEmbed *embed = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObAIFuncUtils::get_embed_provider(allocator_, provider_name, embed));
+  ASSERT_NE(nullptr, embed);
+  ObArray<ObString> headers;
+  ASSERT_EQ(OB_SUCCESS, provider->get_header(allocator_, key, headers));
+  ASSERT_EQ(1, headers.count());
+  EXPECT_EQ(0, headers.at(0).compare("Content-Type: application/json"));
+  ObString model = ObString::make_string("model");
+  ObString system;
+  ObString content = ObString::make_string("question");
+  ObJsonObject *body = nullptr;
+  ASSERT_EQ(OB_SUCCESS, provider->get_body(allocator_, model, system, content,
+      parse(R"({"stream":true,"temperature":0.2})"), body));
+  ASSERT_NE(nullptr, body->get_value("stream"));
+  EXPECT_EQ(ObJsonNodeType::J_BOOLEAN, body->get_value("stream")->json_type());
+  EXPECT_FALSE(body->get_value("stream")->get_boolean());
+  ObIJsonBase *result = nullptr;
+  EXPECT_EQ(OB_INVALID_DATA, provider->parse_output(allocator_, parse(R"({"response":""})"), result));
+  ASSERT_EQ(OB_SUCCESS, provider->parse_output(allocator_, parse(R"({"response":"answer"})"), result));
+  ASSERT_NE(nullptr, result);
+  EXPECT_EQ(ObJsonNodeType::J_STRING, result->json_type());
+}
