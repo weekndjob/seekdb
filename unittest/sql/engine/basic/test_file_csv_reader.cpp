@@ -103,3 +103,26 @@ TEST(FileCsvReader, PreservesQuotedEmptyAndEnforcesRecordAndColumnLimits)
   EXPECT_TRUE(fields.empty());
   std::fclose(file);
 }
+
+TEST(FileCsvReader, HandlesBomAndShortInputsWithoutLosingBytes)
+{
+  const std::string inputs[] = {std::string("\xef\xbb\xbf") + "id,name\n", "x", "xy", ""};
+  const int counts[] = {2, 1, 1, 0};
+  const char *first[] = {"id", "x", "xy", ""};
+  for (int i = 0; i < 4; ++i) {
+    FILE *file = file_with(inputs[i]);
+    ASSERT_NE(nullptr, file);
+    ObArenaAllocator allocator;
+    ObArray<CsvField> fields;
+    CsvRecordReader reader(file, allocator, 32, 64, 4);
+    if (counts[i] == 0) {
+      EXPECT_EQ(OB_ITER_END, reader.next(fields));
+    } else {
+      ASSERT_EQ(OB_SUCCESS, reader.next(fields));
+      ASSERT_EQ(counts[i], fields.count());
+      EXPECT_EQ(first[i], text(fields.at(0)));
+      EXPECT_EQ(OB_ITER_END, reader.next(fields));
+    }
+    std::fclose(file);
+  }
+}

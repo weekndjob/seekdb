@@ -27,7 +27,8 @@ public:
   CsvRecordReader(FILE *stream, common::ObIAllocator &allocator,
                   int64_t max_field_bytes, int64_t max_record_bytes, int64_t max_columns)
     : stream_(stream), allocator_(allocator), max_field_bytes_(max_field_bytes),
-      max_record_bytes_(max_record_bytes), max_columns_(max_columns) {}
+      max_record_bytes_(max_record_bytes), max_columns_(max_columns), initialized_(false),
+      pending_count_(0), pending_index_(0), pending_{} {}
 
   int next(common::ObIArray<CsvField> &fields)
   {
@@ -45,7 +46,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
     }
     while (OB_SUCC(ret) && !done) {
-      const int ch = std::fgetc(stream_);
+      const int ch = read_char();
       if (ch == EOF) {
         if (std::ferror(stream_)) {
           ret = OB_IO_ERROR;
@@ -72,7 +73,7 @@ public:
           }
         } else if (ch == ',' || ch == '\n' || ch == '\r') {
           if (ch == '\r') {
-            const int next = std::fgetc(stream_);
+            const int next = read_char();
             if (next == EOF && std::ferror(stream_)) {
               ret = OB_IO_ERROR;
             } else if (next != '\n') {
@@ -109,6 +110,24 @@ public:
   }
 
 private:
+  int read_char()
+  {
+    if (!initialized_) {
+      initialized_ = true;
+      for (int i = 0; i < 3; ++i) {
+        const int ch = std::fgetc(stream_);
+        if (ch == EOF) {
+          break;
+        }
+        pending_[pending_count_++] = static_cast<unsigned char>(ch);
+      }
+      if (pending_count_ == 3 && pending_[0] == 0xef && pending_[1] == 0xbb && pending_[2] == 0xbf) {
+        pending_count_ = 0;
+      }
+    }
+    return pending_index_ < pending_count_ ? pending_[pending_index_++] : std::fgetc(stream_);
+  }
+
   int append_char(common::ObSqlString &field, int ch)
   {
     int ret = OB_SUCCESS;
@@ -147,6 +166,10 @@ private:
   int64_t max_field_bytes_;
   int64_t max_record_bytes_;
   int64_t max_columns_;
+  bool initialized_;
+  int pending_count_;
+  int pending_index_;
+  unsigned char pending_[3];
 };
 
 } // namespace sql
