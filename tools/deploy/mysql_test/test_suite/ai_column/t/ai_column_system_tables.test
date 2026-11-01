@@ -1,0 +1,11 @@
+# The metadata and queue tables are present on a newly bootstrapped database.
+# Queue inserts must participate in the caller's transaction.
+select count(*) as initially_empty from oceanbase.__all_ai_column_task where table_id = -91001;
+start transaction;
+insert into oceanbase.__all_ai_column_task
+  (table_id, column_id, task_id, rowkey_predicate, request_id, definition_version, eligible_ts)
+values (-91001, 91002, 91003, '`id` = 1', 91004, 1, now(6));
+select count(*) as visible_before_rollback from oceanbase.__all_ai_column_task where table_id = -91001;
+rollback;
+select count(*) as empty_after_rollback from oceanbase.__all_ai_column_task where table_id = -91001;
+select count(*) as metadata_table_exists from oceanbase.__all_ai_column where table_id = -91001;

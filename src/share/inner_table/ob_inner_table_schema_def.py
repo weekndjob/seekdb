@@ -2446,6 +2446,60 @@ all_ai_model_endpoint_def = dict(
 )
 def_table_schema(**all_ai_model_endpoint_def)
 
+# Persistent definitions for asynchronous AI result columns. The schema version
+# changes when the generation rule changes, so in-flight work can be rejected.
+def_table_schema(
+    owner = 'database-competition',
+    table_name = '__all_ai_column',
+    table_id = '1131',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('table_id', 'int'),
+        ('column_id', 'int')
+    ],
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('column_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false'),
+        ('normalized_expr', 'longtext', 'true'),
+        ('dependency_ids', 'longtext', 'true'),
+        ('sync_mode', 'varchar:16', 'false', 'async'),
+        ('max_retries', 'int', 'false', '0'),
+        ('definition_version', 'int', 'false', '0'),
+        ('state_column_id', 'int', 'false'),
+        ('request_column_id', 'int', 'false'),
+        ('result_spec_column_id', 'int', 'false')
+    ]
+)
+
+# Task creation must use the business transaction. Each row represents one
+# AI column in a request group; the request id is shared by that group.
+def_table_schema(
+    owner = 'database-competition',
+    table_name = '__all_ai_column_task',
+    table_id = '1132',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('table_id', 'int'),
+        ('column_id', 'int'),
+        ('task_id', 'int')
+    ],
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('rowkey_predicate', 'longtext', 'true'),
+        ('request_id', 'int', 'false'),
+        ('definition_version', 'int', 'false'),
+        ('state', 'int', 'false', '0'),
+        ('retry_count', 'int', 'false', '0'),
+        ('eligible_ts', 'timestamp:6', 'true'),
+        ('lease_until', 'timestamp:6', 'true'),
+        ('worker_id', 'varchar:128', 'true'),
+        ('last_error', 'longtext', 'true')
+    ]
+)
 
 all_objauth_mysql_def = dict(
     owner = 'cjl476581',
