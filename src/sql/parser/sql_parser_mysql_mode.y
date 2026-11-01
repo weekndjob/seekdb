@@ -47,12 +47,15 @@
   if (0 != explain_type) { \
     malloc_terminal_node(type_node, result->malloc_pool_, explain_type); \
   } \
+  /* Statement value_ is reserved for question-mark accounting. */ \
+  if (0 == explain_type && 0 == display_type && no_use != NULL && no_use->value_ == 1) { \
+    malloc_terminal_node(type_node, result->malloc_pool_, T_DEFAULT); \
+  } \
   if (0 != display_type) { \
     malloc_terminal_node(display_node, result->malloc_pool_, display_type); \
   } \
   malloc_non_terminal_node(explain_stmt, result->malloc_pool_, T_EXPLAIN, 5, \
-                           type_node, display_node, into_table, set_statement_id, stmt); \
-  explain_stmt->value_ = no_use == NULL ? 0 : no_use->value_;
+                           type_node, display_node, into_table, set_statement_id, stmt);
 %}
 
 %destructor {destroy_tree($$);}<node>

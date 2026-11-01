@@ -169,7 +169,9 @@ int ObSelectIntoOp::render_file_copy_row(ObIArray<CsvField> &fields)
         }
         if (OB_SUCC(ret) && (object.is_json() || object.is_collection_sql_type() || object.is_geometry())) {
           ObObj inrow = object;
-          inrow.set_string(object.get_type(), text.string());
+          // Replacing the payload must preserve collection subschema IDs and
+          // other type metadata. set_string() resets that metadata.
+          inrow.set_common_value(text.string());
           inrow.set_inrow();
           ret = render_plain(inrow, field.value_);
         } else if (OB_SUCC(ret)) { ret = ob_write_string(arena, text.string(), field.value_); }
@@ -180,7 +182,8 @@ int ObSelectIntoOp::render_file_copy_row(ObIArray<CsvField> &fields)
       field.quoted_ = true;
     }
     if (OB_SUCC(ret) && field.quoted_ && !field.value_.empty()) {
-      const ObCharsetType source_charset = ObCharset::charset_type_by_coll(expr->datum_meta_.cs_type_);
+      const ObCharsetType source_charset = (object.is_collection_sql_type() || object.is_json() || object.is_geometry())
+          ? CHARSET_UTF8MB4 : ObCharset::charset_type_by_coll(expr->datum_meta_.cs_type_);
       if (source_charset != CHARSET_INVALID && source_charset != CHARSET_BINARY && source_charset != CHARSET_UTF8MB4) {
         const int64_t capacity = std::min<int64_t>(16*1024*1024, field.value_.length()*4LL+4);
         char *converted = static_cast<char *>(arena.alloc(capacity));

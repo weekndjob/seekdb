@@ -10,7 +10,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 cxx = "1"
-parquet = { version = "=57.0.0", default-features = false, features = ["snap"] }
+parquet = { version = "=57.0.0", default-features = false, features = ["snap", "brotli", "flate2-zlib-rs", "lz4", "zstd"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

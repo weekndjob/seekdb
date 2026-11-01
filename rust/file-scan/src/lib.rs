@@ -503,4 +503,36 @@ mod tests {
         assert_eq!(projected.advance(), 1);
         assert!(make_reader(fixture.read(), &[], false).is_err());
     }
+    #[test]
+    fn supported_compression_codecs_roundtrip() {
+        for codec in [
+            Compression::UNCOMPRESSED,
+            Compression::SNAPPY,
+            Compression::GZIP(Default::default()),
+            Compression::BROTLI(Default::default()),
+            Compression::LZ4_RAW,
+            Compression::ZSTD(Default::default()),
+        ] {
+            let fixture = Fixture::new();
+            let schema = Arc::new(parse_message_type("message f { REQUIRED INT64 id; }").unwrap());
+            let properties = Arc::new(WriterProperties::builder().set_compression(codec).build());
+            let mut writer =
+                SerializedFileWriter::new(fixture.create(), schema, properties).unwrap();
+            let mut group = writer.next_row_group().unwrap();
+            let mut column = group.next_column().unwrap().unwrap();
+            column
+                .typed::<Int64Type>()
+                .write_batch(&[1, 2, 3], None, None)
+                .unwrap();
+            column.close().unwrap();
+            group.close().unwrap();
+            writer.close().unwrap();
+            let mut scan = make_reader(fixture.read(), &[], false).unwrap();
+            for expected in 1..=3 {
+                assert_eq!(scan.advance(), 0, "{:?}: {}", codec, scan.error());
+                assert_eq!(scan.row()[0].integer, expected);
+            }
+            assert_eq!(scan.advance(), 1);
+        }
+    }
 }

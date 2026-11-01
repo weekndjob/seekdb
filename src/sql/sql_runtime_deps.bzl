@@ -1,6 +1,7 @@
 """Native dependencies of the SQL module."""
 
 SQL_RUNTIME_NATIVE_DEPS = [
+    "//rust:file_scan_headers",
     "//src/oblib/easy:easy",
     "//src/oblib:common_sql_mode",
     "//src/oblib:oblib_foundation",

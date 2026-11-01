@@ -33,7 +33,10 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
   // Lower the file-schema command to a native metadata scan. Keeping the file
   // scan in the resulting plan preserves security and file identity checks on
   // execution, including cached plans, without executing the input query.
-  if (parse_tree.type_ == T_EXPLAIN && parse_tree.num_child_ == 5 && parse_tree.value_ == 1) {
+  const bool file_describe = parse_tree.type_ == T_EXPLAIN && parse_tree.num_child_ == 5
+      && parse_tree.children_[EXPLAIN_FORMAT] != nullptr
+      && parse_tree.children_[EXPLAIN_FORMAT]->type_ == T_DEFAULT;
+  if (file_describe) {
     ParseNode *select = parse_tree.children_[EXPLAIN_CHILD_STMT];
     if (select && select->type_ == T_SELECT && select->num_child_ >= PARSE_SELECT_MAX_IDX) {
       ParseNode *from = select->children_[PARSE_SELECT_FROM];
@@ -62,6 +65,8 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
+  // DESCRIBE of other SQL statements retains the ordinary EXPLAIN behavior.
+  if (file_describe) { parse_tree.children_[EXPLAIN_FORMAT] = nullptr; }
   ObExplainStmt *explain_stmt = NULL;
   if (!(T_EXPLAIN == parse_tree.type_  && 5 == parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;

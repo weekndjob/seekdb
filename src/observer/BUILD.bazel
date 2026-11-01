@@ -520,6 +520,7 @@ _SEEKDB_GRPC_ABSL_ARCHIVE_NAMES = [
 ]
 
 _SEEKDB_ORDERED_LINK_FILES = [
+    "//rust:file_scan_archive",
     "//rust:sql_nio_archive",
     "//rust:config_archive",
 ] + select({

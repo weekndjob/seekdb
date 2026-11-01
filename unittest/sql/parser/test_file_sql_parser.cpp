@@ -70,7 +70,11 @@ TEST(FileSqlParser, DistinguishesDescribeFromExplainAndLowersCopyToNativeInto)
     ASSERT_EQ(OB_SUCCESS, parser.parse(ObString::make_string(sql), result));
     const ParseNode *node = result.result_tree_->children_[0];
     ASSERT_EQ(T_EXPLAIN, node->type_);
-    EXPECT_EQ(sql[0] == 'd' ? 1 : 0, node->value_);
+    EXPECT_EQ(0, node->value_); // statement parameter count is preserved
+    if (sql[0] == 'd') {
+      ASSERT_NE(nullptr, node->children_[0]);
+      EXPECT_EQ(T_DEFAULT, node->children_[0]->type_);
+    } else { EXPECT_EQ(nullptr, node->children_[0]); }
   }
   const char *queries[] = {
       "copy docs to '/tmp/out.csv'",
