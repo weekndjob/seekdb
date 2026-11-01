@@ -511,6 +511,8 @@ END_P SET_VAR DELIMITER
 %type <node> column_list_with_boost with_param_column_ref
 %type <node> es_sql_opt
 %type <node> hybrid_search_expr hybrid_search_param
+%token <non_reserved_keyword> READ_CSV READ_JSON READ_NDJSON READ_PARQUET FILE_SQL_GLOB
+%type <node> file_sql_expr file_sql_name file_sql_options file_sql_option
 %type <node> vector_similarity_expr vector_similarity_metric
 %type <node> algorithm_opt lock_opt
 %type <node> flush_privileges_stmt opt_flush_privileges_scope
@@ -10848,6 +10850,10 @@ tbl_name
 {
   $$ = $1;
 }
+  | file_sql_expr
+  {
+    $$ = $1;
+  }
 ;
 
 tbl_name:
@@ -17451,6 +17457,46 @@ UNNEST '(' simple_expr_list ')'
 }
 ;
 
+file_sql_expr:
+file_sql_name '(' literal file_sql_options ')'
+{
+  ParseNode *alias = NULL;
+  make_name_node(alias, result->malloc_pool_, "");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FILE_TABLE_EXPRESSION, 4, $1, $3, $4, alias);
+}
+| file_sql_name '(' literal file_sql_options ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FILE_TABLE_EXPRESSION, 4, $1, $3, $4, $6);
+}
+| file_sql_name '(' literal file_sql_options ')' AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FILE_TABLE_EXPRESSION, 4, $1, $3, $4, $7);
+}
+;
+
+file_sql_name:
+READ_CSV { make_name_node($$, result->malloc_pool_, "read_csv"); }
+| READ_JSON { make_name_node($$, result->malloc_pool_, "read_json"); }
+| READ_NDJSON { make_name_node($$, result->malloc_pool_, "read_ndjson"); }
+| READ_PARQUET { make_name_node($$, result->malloc_pool_, "read_parquet"); }
+| FILE_SQL_GLOB { make_name_node($$, result->malloc_pool_, "glob"); }
+;
+
+file_sql_options:
+/* empty */ { $$ = NULL; }
+| file_sql_options ',' file_sql_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+file_sql_option:
+relation_name COMP_EQ expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FILE_SQL_OPTION, 2, $1, $3);
+}
+;
+
 hybrid_search_expr:
 HYBRID_SEARCH '(' literal ',' hybrid_search_param ')'
 {
@@ -18181,6 +18227,11 @@ ACCOUNT
 |       INCONSISTENT 
 |       INDIVIDUAL
 |       HYBRID_SEARCH
+|       READ_CSV
+|       READ_JSON
+|       READ_NDJSON
+|       READ_PARQUET
+|       FILE_SQL_GLOB
 ;
 
 unreserved_keyword_special:
