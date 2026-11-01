@@ -141,6 +141,15 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline int set_column_name(const common::ObString &col_name) { return deep_copy_str(col_name, column_name_); }
   inline int set_comment(const char *comment) { return deep_copy_str(comment, comment_); }
   inline int set_comment(const common::ObString &comment) { return deep_copy_str(comment, comment_); }
+  // Transient CREATE/ALTER DDL payload. The durable copy lives in __all_ai_column.
+  inline int set_ai_expression(const common::ObString &value) { return deep_copy_str(value, ai_expression_); }
+  inline int set_ai_dependency_ids(const common::ObString &value) { return deep_copy_str(value, ai_dependency_ids_); }
+  inline void set_ai_max_retries(int64_t value) { ai_max_retries_ = value; }
+  inline bool is_ai_column() const { return !ai_expression_.empty(); }
+  inline bool is_ai_result_column() const { return (column_flags_ & AI_RESULT_COLUMN_FLAG) != 0; }
+  inline const common::ObString &get_ai_expression() const { return ai_expression_; }
+  inline const common::ObString &get_ai_dependency_ids() const { return ai_dependency_ids_; }
+  inline int64_t get_ai_max_retries() const { return ai_max_retries_; }
   inline void set_on_update_current_timestamp(const bool is_on_update_for_timestamp) { on_update_current_timestamp_ = is_on_update_for_timestamp; }
   int set_extended_type_info(const common::ObIArray<common::ObString> &info);
   int add_type_info(const common::ObString &type_info);
@@ -398,6 +407,9 @@ private:
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
   share::ObLocalSessionVar local_session_vars_;
+  common::ObString ai_expression_;
+  common::ObString ai_dependency_ids_;
+  int64_t ai_max_retries_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
+#include "sql/resolver/ddl/ai_column_definition.h"
+#include "lib/string/ob_sql_string.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/ddl/ob_fts_index_builder_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -35,6 +37,45 @@ using namespace share::schema;
 using namespace omt;
 namespace sql
 {
+namespace {
+int resolve_ai_dependency_ids(const ParseNode &expr,
+                              const ObIArray<ObColumnSchemaV2> &columns,
+                              const ObIArray<bool> &ai_flags,
+                              ObColumnSchemaV2 &target)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<AiColumnReference, 4> references;
+  ObSqlString ids;
+  if (OB_FAIL(collect_ai_column_references(expr, references))) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < references.count(); ++i) {
+      const AiColumnReference &ref = references.at(i);
+      if (!ref.database.empty() || !ref.table.empty()) {
+        ret = OB_NOT_SUPPORTED;
+      } else {
+        int64_t found = -1;
+        for (int64_t j = 0; j < columns.count(); ++j) {
+          if (columns.at(j).get_column_name_str().case_compare(ref.column) == 0) {
+            found = j;
+            break;
+          }
+        }
+        if (found < 0) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+        } else if (ai_flags.at(found)) {
+          ret = OB_NOT_SUPPORTED;
+        } else if (OB_FAIL(ids.append_fmt("%s%lu", i == 0 ? "" : ",",
+                                         columns.at(found).get_column_id()))) {
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ret = target.set_ai_dependency_ids(ids.string());
+  }
+  return ret;
+}
+} // namespace
 ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
     : ObCreateTableResolverBase(params),
       cur_column_id_(OB_APP_MIN_COLUMN_ID - 1),
@@ -633,6 +674,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
     // Store the column schema after resolve_column_definition in resolved_cols
     // To support generating columns in any order, all column_schema are generated first and then uniformly stored in table_schema
     ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> resolved_cols;
+    ObSEArray<bool, SEARRAY_INIT_NUM> ai_flags;
     // Resolve column names with the runtime name-case mode.
     //RESOLVE_NON_COL needs to add the columns in the query to stats in order to resolve PK constraint information etc.
     if (OB_FAIL(ret)) {
@@ -665,6 +707,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
         } else if (OB_FAIL(resolve_column_name(column, element))) {
         } else {
           OZ (resolved_cols.push_back(column));
+          OZ (ai_flags.push_back(element->num_child_ == 8));
         }
       }
     }
@@ -695,6 +738,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                                 table_schema,
                                                 false,
                                                 is_create_table_as))) {
+          } else if (column.is_ai_column() &&
+                     OB_FAIL(resolve_ai_dependency_ids(*element->children_[4], resolved_cols,
+                                                       ai_flags, column))) {
           } else if (OB_FAIL(check_default_value(column.get_cur_default_value(),
                                           session_info_->get_tz_info_wrap(),
                                           NULL,
@@ -840,6 +886,33 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
 
           if (OB_SUCC(ret)) {
             if (OB_FAIL(stats.push_back(stat))) {
+            }
+          }
+          // These columns are physically stored with the user-visible result.
+          // Generate their IDs after all user column IDs have been reserved.
+          if (OB_SUCC(ret) && column.is_ai_column()) {
+            const uint64_t result_id = column.get_column_id();
+            const char *suffixes[] = {"state", "request", "result_spec"};
+            for (int64_t k = 0; OB_SUCC(ret) && k < 3; ++k) {
+              ObColumnSchemaV2 hidden;
+              ObSqlString name;
+              hidden.set_column_id(gen_column_id());
+              hidden.set_is_hidden(true);
+              hidden.set_nullable(true);
+              if (k == 2) {
+                hidden.set_data_type(ObVarcharType);
+                hidden.set_data_length(2048);
+                hidden.set_charset_type(CHARSET_UTF8MB4);
+                hidden.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+              } else {
+                hidden.set_data_type(k == 0 ? ObIntType : ObUInt64Type);
+                hidden.set_charset_type(CHARSET_BINARY);
+                hidden.set_collation_type(CS_TYPE_BINARY);
+              }
+              if (OB_FAIL(name.assign_fmt("__ai_%s_%lu", suffixes[k], result_id))) {
+              } else if (OB_FAIL(hidden.set_column_name(name.string()))) {
+              } else if (OB_FAIL(resolved_cols.push_back(hidden))) {
+              }
             }
           }
         }

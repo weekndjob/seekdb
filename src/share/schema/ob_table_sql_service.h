@@ -35,6 +35,11 @@ class ObMultiVersionSchemaService;
 class ObTableSchema;
 class ObColumnSchemaV2;
 
+// Called inside the DDL schema transaction after AI result and state columns exist.
+int batch_add_ai_columns(common::ObISQLClient &sql_client,
+                         const ObIArray<ObTableSchema> &tables,
+                         bool insert_ignore = false);
+
 class ObTableSqlService : public ObDDLSqlService
 {
 public:

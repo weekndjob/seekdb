@@ -1777,6 +1777,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
   bool is_modify_column = stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
                   && OB_DDL_MODIFY_COLUMN == (static_cast<AlterColumnSchema &>(column)).alter_type_;
   ParseNode *column_definition_ref_node = NULL;
+  bool ai_embedding = false;
   if (node != nullptr && node->type_ == T_COLUMN_DEFINITION && node->num_child_ == 8) {
     AiColumnDefinition definition;
     ObSEArray<AiColumnReference, 4> references;
@@ -1784,10 +1785,15 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       SQL_RESV_LOG(WARN, "invalid AI column definition", K(ret));
     } else if (OB_FAIL(collect_ai_column_references(*node->children_[4], references))) {
       SQL_RESV_LOG(WARN, "invalid AI column dependency expression", K(ret));
+    } else if (OB_FAIL(column.set_ai_expression(definition.expression))) {
+      SQL_RESV_LOG(WARN, "failed to save AI column expression", K(ret));
     } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "AI COLUMN metadata and asynchronous execution are not implemented");
+      column.set_ai_max_retries(definition.max_retries);
+      column.add_column_flag(AI_RESULT_COLUMN_FLAG);
+      ai_embedding = definition.embedding;
     }
+  }
+  if (OB_FAIL(ret)) {
   } else if (T_COLUMN_DEFINITION != node->type_ || node->num_child_ < COLUMN_DEFINITION_NUM_CHILD ||
      OB_ISNULL(allocator_) || OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0]) ||
      T_COLUMN_REF != node->children_[0]->type_ ||
@@ -1883,6 +1889,26 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
 
       if (OB_SUCC(ret) && column.is_collection()) {
         if (OB_FAIL(resolve_collection_column(type_node, column))) {
+        }
+      }
+      if (OB_SUCC(ret) && ai_embedding) {
+        const ParseNode *args = node->children_[4]->children_[1];
+        if (!column.is_collection()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "AI_EMBED requires a VECTOR result column");
+        } else if (args->num_child_ == 3 && args->children_[2] != nullptr) {
+          const ParseNode &requested = *args->children_[2];
+          int64_t declared_dim = 0;
+          if (requested.type_ != T_INT || requested.value_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+          } else if (OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(
+                                 column.get_extended_type_info(), declared_dim))) {
+          } else if (declared_dim != requested.value_) {
+            ret = OB_ERR_INVALID_VECTOR_DIM;
+            LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM,
+                           static_cast<unsigned>(declared_dim),
+                           static_cast<unsigned>(requested.value_));
+          }
         }
       }
     }

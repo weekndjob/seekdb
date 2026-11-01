@@ -17,6 +17,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "config_bridge.h"
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
+#include "sql/resolver/ddl/ai_column_definition.h"
+#include "lib/string/ob_sql_string.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "sql/resolver/ddl/ob_index_builder_util.h"
@@ -3424,6 +3426,29 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
                                                           false))) {
         } else if (OB_FAIL(fill_column_schema_according_stat(stat, alter_column_schema))) {
         } else if (OB_FAIL(set_column_collation(alter_column_schema))) {
+        }
+        if (OB_SUCC(ret) && alter_column_schema.is_ai_column()) {
+          ObSEArray<AiColumnReference, 4> references;
+          ObSqlString ids;
+          if (OB_FAIL(collect_ai_column_references(*node.children_[i]->children_[4], references))) {
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < references.count(); ++j) {
+              const AiColumnReference &ref = references.at(j);
+              const ObColumnSchemaV2 *source = table_schema_->get_column_schema(ref.column);
+              if (!ref.database.empty() || !ref.table.empty()) {
+                ret = OB_NOT_SUPPORTED;
+              } else if (source == nullptr) {
+                ret = OB_ERR_BAD_FIELD_ERROR;
+              } else if (source->is_ai_result_column()) {
+                ret = OB_NOT_SUPPORTED;
+              } else if (OB_FAIL(ids.append_fmt("%s%lu", j == 0 ? "" : ",",
+                                                source->get_column_id()))) {
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ret = alter_column_schema.set_ai_dependency_ids(ids.string());
+          }
         }
 
         //do some check
