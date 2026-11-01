@@ -15,6 +15,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
+#include "sql/engine/basic/file_scan.h"
+#include <algorithm>
+#include <cctype>
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "share/ob_time_utility2.h"
@@ -3081,6 +3084,55 @@ int ObSelectResolver::resolve_into_outfile_without_format(const ParseNode *node,
   return ret;
 }
 
+
+int ObSelectResolver::resolve_file_copy(const ParseNode &node, ObSelectIntoItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool enabled = false;
+  file_sql::Definition definition;
+  definition.options.header = false;
+  ObString secure;
+  OZ (session_info_->get_sys_variable(share::SYS_VAR_ENABLE_FILE_SQL, enabled));
+  if (OB_SUCC(ret) && !enabled) { ret = OB_NOT_SUPPORTED; LOG_USER_ERROR(OB_NOT_SUPPORTED, "file SQL is disabled"); }
+  OZ (resolve_into_const_node(node.children_[0], item.outfile_name_));
+  OZ (session_info_->get_secure_file_priv(secure));
+  if (OB_SUCC(ret)) {
+    if (!item.outfile_name_.is_varchar()) return OB_ERR_PARSE_SQL;
+    definition.options.path.assign(item.outfile_name_.get_string().ptr(), item.outfile_name_.get_string().length());
+    definition.options.root.assign(secure.ptr(), secure.length());
+    const ParseNode *options = node.children_[1];
+    std::vector<std::string> seen;
+    if (options != nullptr && options->num_child_ > 16) return OB_INVALID_ARGUMENT;
+    for (int64_t i = 0; OB_SUCC(ret) && options != nullptr && i < options->num_child_; ++i) {
+      const ParseNode *option = options->children_[i];
+      if (option == nullptr || option->num_child_ != 2 || option->children_[0] == nullptr || option->children_[1] == nullptr) return OB_ERR_PARSE_SQL;
+      const ParseNode &key = *option->children_[0], &value = *option->children_[1];
+      std::string name(key.str_value_, key.str_len_);
+      std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+      if (std::find(seen.begin(), seen.end(), name) != seen.end()) return OB_INVALID_ARGUMENT;
+      seen.push_back(name);
+      if (name == "header" && (value.type_ == T_BOOL || value.type_ == T_INT)) {
+        if (value.value_ != 0 && value.value_ != 1) return OB_INVALID_ARGUMENT;
+        definition.options.header = value.value_ != 0;
+      } else if (value.type_ == T_VARCHAR || value.type_ == T_CHAR) {
+        std::string text(value.str_value_, value.str_len_);
+        if (name == "format") { if (text != "csv" && text != "CSV") return OB_NOT_SUPPORTED; }
+        else if (name == "nullstr") definition.options.nullstr = text;
+        else if (text.size() != 1) return OB_INVALID_ARGUMENT;
+        else if (name == "delimiter" || name == "delim" || name == "sep") definition.options.delimiter = text[0];
+        else if (name == "quote") definition.options.quote = text[0];
+        else if (name == "escape") definition.options.escape = text[0];
+        else return OB_NOT_SUPPORTED;
+      } else return OB_NOT_SUPPORTED;
+    }
+    definition.columns.push_back({"copy", file_sql::VARCHAR});
+    const std::string encoded = file_sql::FileScan::encode(definition);
+    OZ (ob_write_string(*allocator_, ObString(encoded.size(), encoded.data()), item.external_properties_));
+    item.is_single_ = true;
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_into_clause(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
@@ -3107,6 +3159,8 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
       if (T_INTO_OUTFILE == node->type_) { // into outfile
         if (is_in_set_query()) {
           ret = OB_INAPPROPRIATE_INTO;
+        } else if (node->num_child_ == 2) {
+          ret = resolve_file_copy(*node, *into_item);
         } else if (node->num_child_ == 3 && NULL != node->children_[1]
             && T_EXTERNAL_FILE_FORMAT == node->children_[1]->type_) { // Handle with `FORMAT`
           if (OB_FAIL(resolve_into_outfile_with_format(node, *into_item))) {

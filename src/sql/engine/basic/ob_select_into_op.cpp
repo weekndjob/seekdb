@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include "share/object/ob_obj_cast.h"
+#include "sql/engine/expr/ob_obj_cast_runtime.h"
 #include <cmath>
 #include <memory>
 
@@ -41,6 +43,110 @@ OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_, outfil
     external_properties_);
 
 
+
+bool ObSelectIntoOp::is_file_copy() const
+{
+  const ObString &properties = MY_SPEC.external_properties_.str_;
+  return !properties.empty() && file_sql::FileScan::is_definition(std::string(properties.ptr(), properties.length()));
+}
+
+int ObSelectIntoOp::open_file_copy()
+{
+  int ret = OB_SUCCESS;
+  bool enabled = false;
+  ObString root;
+  file_sql::Definition definition;
+  const ObString &properties = MY_SPEC.external_properties_.str_;
+  OZ (ctx_.get_my_session()->get_sys_variable(share::SYS_VAR_ENABLE_FILE_SQL, enabled));
+  if (OB_SUCC(ret) && !enabled) return OB_NOT_SUPPORTED;
+  OZ (ctx_.get_my_session()->get_secure_file_priv(root));
+  if (OB_SUCC(ret) && file_sql::FileScan::decode(std::string(properties.ptr(), properties.length()), definition) != file_sql::OK) ret = OB_INVALID_ARGUMENT;
+  if (OB_SUCC(ret)) {
+    definition.options.root.assign(root.ptr(), root.length());
+    void *memory = ctx_.get_allocator().alloc(sizeof(file_sql::CsvWriter));
+    if (memory == nullptr) return OB_ALLOCATE_MEMORY_FAILED;
+    copy_writer_ = new(memory) file_sql::CsvWriter();
+    if (copy_writer_->open(definition.options) != file_sql::OK) return OB_IO_ERROR;
+    if (definition.options.header) {
+      std::vector<file_sql::Cell> header;
+      for (const auto &column : definition.columns) header.push_back({column.name,false});
+      if (copy_writer_->write(header) != file_sql::OK) return OB_IO_ERROR;
+    }
+    copy_rows_ = 0; copy_done_ = false;
+  }
+  return ret;
+}
+
+int ObSelectIntoOp::write_copy_row()
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  std::vector<file_sql::Cell> row;
+  size_t bytes = 0;
+  const ObDataTypeCastParams params = ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session());
+  ObCastCtx cast_ctx(&allocator, &params, CM_NONE, CS_TYPE_UTF8MB4_BIN);
+  ObSqlObjCastRuntime runtime(&ctx_); cast_ctx.runtime_ = &runtime;
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.select_exprs_.count(); ++i) {
+    ObExpr *expr = MY_SPEC.select_exprs_.at(i);
+    ObDatum *datum = nullptr;
+    file_sql::Cell cell;
+    OZ (expr->eval(eval_ctx_, datum));
+    if (OB_SUCC(ret) && !datum->is_null()) {
+      ObObj source, text;
+      OZ (datum->to_obj(source, expr->obj_meta_));
+      OZ (ObObjCaster::to_type(ObVarcharType, CS_TYPE_UTF8MB4_BIN, cast_ctx, source, text));
+      if (OB_SUCC(ret)) {
+        const ObString value = text.get_string();
+        bytes += value.length();
+        if (bytes > 8 * 1024 * 1024) ret = OB_SIZE_OVERFLOW;
+        else { cell.is_null = false; cell.text.assign(value.ptr(), value.length()); }
+      }
+    }
+    if (OB_SUCC(ret)) row.push_back(std::move(cell));
+  }
+  if (OB_SUCC(ret) && copy_writer_->write(row) != file_sql::OK) ret = OB_IO_ERROR;
+  return ret;
+}
+
+int ObSelectIntoOp::run_file_copy(int64_t batch_size)
+{
+  if (copy_done_) return OB_ITER_END;
+  int ret = OB_SUCCESS;
+  bool end = false;
+  if (copy_writer_ == nullptr || child_ == nullptr) return OB_ERR_UNEXPECTED;
+  while (OB_SUCC(ret) && !end && copy_rows_ < top_limit_cnt_) {
+    clear_evaluated_flag();
+    OZ (ctx_.check_status());
+    if (OB_FAIL(ret)) break;
+    if (batch_size > 0) {
+      const ObBatchRows *rows = nullptr;
+      OZ (child_->get_next_batch(min(batch_size, top_limit_cnt_ - copy_rows_), rows));
+      if (OB_SUCC(ret)) {
+        ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+        guard.set_batch_size(rows->size_);
+        for (int64_t i = 0; OB_SUCC(ret) && i < rows->size_ && copy_rows_ < top_limit_cnt_; ++i) {
+          if (rows->skip_->contain(i)) continue;
+          guard.set_batch_idx(i);
+          OZ (write_copy_row());
+          if (OB_SUCC(ret)) ++copy_rows_;
+        }
+        end = rows->end_;
+      }
+    } else {
+      ret = child_->get_next_row();
+      if (ret == OB_ITER_END) { ret = OB_SUCCESS; end = true; }
+      else if (OB_SUCC(ret)) { OZ (write_copy_row()); if (OB_SUCC(ret)) ++copy_rows_; }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (copy_writer_->finish() != file_sql::OK) ret = OB_IO_ERROR;
+    else { ctx_.get_physical_plan_ctx()->set_affected_rows(copy_rows_); ret = OB_ITER_END; }
+  }
+  copy_done_ = true;
+  if (ret != OB_ITER_END) copy_writer_->close();
+  return ret;
+}
+
 int ObSelectIntoOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -53,6 +159,7 @@ int ObSelectIntoOp::inner_open()
     if (OB_FAIL(session->get_sql_select_limit(top_limit_cnt_))) {
     }
   }
+  if (OB_SUCC(ret) && is_file_copy()) return open_file_copy();
   if (OB_SUCC(ret) && !MY_SPEC.external_properties_.str_.empty()) {
     if (OB_FAIL(external_properties_.load_from_string(MY_SPEC.external_properties_.str_,
                                                       ctx_.get_allocator()))) {
@@ -188,6 +295,7 @@ int ObSelectIntoOp::calc_outfile_path()
 }
 int ObSelectIntoOp::inner_get_next_row()
 {
+  if (is_file_copy()) return run_file_copy(0);
   int ret = 0 == top_limit_cnt_ ? OB_ITER_END : OB_SUCCESS;
   int64_t row_count = 0;
   const ObItemType into_type = MY_SPEC.into_type_;
@@ -236,6 +344,11 @@ int ObSelectIntoOp::inner_get_next_row()
 
 int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
+  if (is_file_copy()) {
+    const int ret = run_file_copy(min(max_row_cnt, MY_SPEC.max_batch_size_));
+    brs_.size_ = 0; brs_.end_ = true;
+    return ret == OB_ITER_END ? OB_SUCCESS : ret;
+  }
   int ret = OB_SUCCESS;
   const ObBatchRows *child_brs = NULL;
   int64_t batch_size = min(max_row_cnt, MY_SPEC.max_batch_size_);
@@ -325,6 +438,7 @@ int ObSelectIntoOp::inner_rescan()
 int ObSelectIntoOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  if (copy_writer_ != nullptr) copy_writer_->close();
   if (OB_NOT_NULL(data_writer_) && OB_FAIL(data_writer_->close_data_writer())) {
   }
   return ret;
@@ -1215,7 +1329,7 @@ int ObSelectIntoOp::check_secure_file_path(ObString file_name)
 #endif
     ret = OB_FILE_NOT_EXIST;
   } else if (OB_FAIL(ObSchemaUtils::get_runtime_varchar_variable(*GCTX.schema_service_,
-                                                                SYS_VAR_SECURE_FILE_PRIV,
+                                                                share::SYS_VAR_SECURE_FILE_PRIV,
                                                                 ctx_.get_allocator(),
                                                                 secure_file_priv))) {
   } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
@@ -1275,6 +1389,9 @@ int ObSelectIntoOp::new_data_writer(ObExternalFileWriter *&data_writer)
 
 void ObSelectIntoOp::destroy()
 {
+  if (copy_writer_ != nullptr) {
+    copy_writer_->~CsvWriter(); ctx_.get_allocator().free(copy_writer_); copy_writer_ = nullptr;
+  }
   if (OB_NOT_NULL(data_writer_)) {
     data_writer_->~ObExternalFileWriter();
   }

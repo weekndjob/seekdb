@@ -17,6 +17,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_explain_resolver.h"
 #include "sql/resolver/ob_resolver.h"
+#include "sql/engine/basic/file_scan.h"
+#include "sql/parser/ob_parser.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -26,6 +28,32 @@ const static int64_t EXPLAIN_DISPLAY_OPTION = 1;
 const static int64_t EXPLAIN_INTO_TABLE = 2;
 const static int64_t EXPLAIN_STMT_ID = 3;
 const static int64_t EXPLAIN_CHILD_STMT = 4;
+
+static int describe_file_table(ObResolverParams &params, const file_sql::Definition &definition, ObStmt *&statement)
+{
+  int ret = OB_SUCCESS;
+  const char *types[] = {"NULL", "BIGINT", "DOUBLE", "BOOLEAN", "VARCHAR", "DATE", "DATETIME"};
+  const char hex[] = "0123456789abcdef";
+  std::string query = "SELECT column_name,column_type,`null`,`key`,`default`,extra FROM (";
+  for (size_t i = 0; i < definition.columns.size(); ++i) {
+    const auto &column = definition.columns[i];
+    if (i) query += " UNION ALL ";
+    std::string name;
+    for (unsigned char byte : column.name) { name += hex[byte >> 4]; name += hex[byte & 15]; }
+    query += "SELECT CONVERT(X'" + name + "' USING utf8mb4) AS column_name,'" + types[column.type] +
+             "' AS column_type,'" + (column.nullable ? "YES" : "NO") +
+             "' AS `null`,NULL AS `key`,NULL AS `default`,NULL AS extra," + std::to_string(i) + " AS ordinal";
+  }
+  query += ") file_schema ORDER BY ordinal";
+  ObParser parser(*params.allocator_, params.session_info_->get_sql_mode(), params.session_info_->get_charsets4parser());
+  ParseResult parsed;
+  ObResolver resolver(params);
+  OZ (parser.parse(ObString(query.size(), query.data()), parsed));
+  CK (parsed.result_tree_ != nullptr && parsed.result_tree_->num_child_ == 1);
+  if (OB_SUCC(ret)) OZ (resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parsed.result_tree_->children_[0], statement));
+  return ret;
+}
+
 int ObExplainResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -63,6 +91,21 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to generate stmt for child stmt");
       } else {
+        if (parse_tree.is_hidden_const_ && child_stmt->is_select_stmt()) {
+          const auto *select = static_cast<ObSelectStmt *>(child_stmt);
+          if (select->get_table_size() == 1) {
+            const TableItem *table = select->get_table_item(0);
+            if (table != nullptr && table->is_function_table() && table->function_table_expr_ != nullptr && table->function_table_expr_->is_const_raw_expr()) {
+              const ObObj &value = static_cast<const ObConstRawExpr *>(table->function_table_expr_)->get_value();
+              file_sql::Definition definition;
+              if (!value.is_varchar() || file_sql::FileScan::decode(std::string(value.get_string().ptr(), value.get_string().length()), definition) != file_sql::OK) return OB_INVALID_ARGUMENT;
+              ObStmt *description = nullptr;
+              ret = describe_file_table(params_, definition, description);
+              if (OB_SUCC(ret)) stmt_ = static_cast<ObDMLStmt *>(description);
+              return ret;
+            }
+          }
+        }
         explain_stmt->set_explain_query_stmt(static_cast<ObDMLStmt *>(child_stmt));
         ParseNode *format = parse_tree.children_[EXPLAIN_FORMAT];
         if (NULL != format) {

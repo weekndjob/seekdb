@@ -5478,6 +5478,19 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
       }
     }
     if (OB_SUCC(ret)) {
+      if (file_sql::FileScan::is_definition(std::string(op.get_external_properties().ptr(), op.get_external_properties().length()))) {
+        file_sql::Definition definition;
+        if (file_sql::FileScan::decode(std::string(op.get_external_properties().ptr(), op.get_external_properties().length()), definition) != file_sql::OK) return OB_INVALID_ARGUMENT;
+        definition.columns.clear();
+        const auto *select = static_cast<const ObSelectStmt *>(op.get_stmt());
+        for (int64_t i = 0; i < select->get_select_item_size(); ++i) {
+          const SelectItem &item = select->get_select_item(i);
+          const ObString &name = item.alias_name_.empty() ? item.expr_name_ : item.alias_name_;
+          definition.columns.push_back({std::string(name.ptr(), name.length()), file_sql::VARCHAR});
+        }
+        const std::string encoded = file_sql::FileScan::encode(definition);
+        OZ (spec.external_properties_.store_str(ObString(encoded.size(), encoded.data())));
+      }
       spec.into_type_ = op.get_into_type();
       spec.is_optional_ = op.get_is_optional();
       spec.is_single_ = op.get_is_single();
@@ -5509,6 +5522,8 @@ int ObStaticEngineCG::generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec 
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
   } else {
+    spec.is_file_scan_ = value_raw_expr->is_const_raw_expr();
+    if (spec.is_file_scan_) OZ (spec.file_column_ids_.init(op.get_stmt()->get_column_size()));
     spec.has_correlated_expr_ = value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
     spec.value_expr_ = value_expr;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_output_exprs().count(); ++i) {
@@ -5526,6 +5541,7 @@ int ObStaticEngineCG::generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec 
         OZ (mark_expr_self_produced(col_item->expr_));
         OZ (generate_rt_expr(*col_item->expr_, rt_expr));
         OZ (spec.column_exprs_.push_back(rt_expr));
+        if (spec.is_file_scan_) OZ (spec.file_column_ids_.push_back(col_item->column_id_ - OB_APP_MIN_COLUMN_ID));
       }
     }
   }
