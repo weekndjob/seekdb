@@ -1,4 +1,11 @@
 {
+  "file_scan": {
+    "crate": "file-scan",
+    "headers": {
+      "file_scan_bridge.h": "cxxbridge/include/file-scan/src/lib.rs.h"
+    },
+    "deps": []
+  },
   "sql_nio": {
     "crate": "sql-nio",
     "headers": {},

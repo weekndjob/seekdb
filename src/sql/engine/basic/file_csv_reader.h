@@ -31,8 +31,10 @@ public:
     : stream_(stream), allocator_(allocator), max_field_bytes_(max_field_bytes),
       max_record_bytes_(max_record_bytes), max_columns_(max_columns), initialized_(false),
       pending_count_(0), pending_index_(0), pending_{}, delimiter_(delimiter), quote_(quote),
-      escape_(escape), null_text_(null_text) {}
+      escape_(escape), null_text_(null_text), line_(1), record_line_(1), record_(0) {}
   void set_null_text(const common::ObString &value) { null_text_ = value; }
+  int64_t record() const { return record_; }
+  int64_t line() const { return record_line_; }
 
   int next(common::ObIArray<CsvField> &fields)
   {
@@ -46,9 +48,11 @@ public:
     bool done = false;
     int64_t bytes = 0;
     fields.reset();
+    record_line_ = line_;
     if (stream_ == nullptr || max_field_bytes_ < 1 || max_record_bytes_ < 1 || max_columns_ < 1
         || delimiter_ == 0 || delimiter_ == '\n' || delimiter_ == '\r' || delimiter_ == quote_
-        || quote_ == 0 || quote_ == '\n' || quote_ == '\r' || escape_ == 0) {
+        || quote_ == 0 || quote_ == '\n' || quote_ == '\r' || escape_ == 0
+        || escape_ == '\n' || escape_ == '\r') {
       ret = OB_INVALID_ARGUMENT;
     }
     while (OB_SUCC(ret) && !done) {
@@ -115,6 +119,12 @@ public:
         }
       }
     }
+    if (saw_byte) { ++record_; }
+    if (ret == OB_INVALID_DATA || ret == OB_SIZE_OVERFLOW) {
+      OB_LOGGER.log_user_message(ObLogger::USER_ERROR, ret,
+          "Invalid CSV record %ld starting at line %ld, field %ld%s",
+          record_, record_line_, fields.count()+1, ret == OB_SIZE_OVERFLOW ? ": resource limit exceeded" : "");
+    }
     if (ret != OB_SUCCESS) {
       fields.reset();
     }
@@ -137,7 +147,9 @@ private:
         pending_count_ = 0;
       }
     }
-    return pending_index_ < pending_count_ ? pending_[pending_index_++] : std::fgetc(stream_);
+    const int ch = pending_index_ < pending_count_ ? pending_[pending_index_++] : std::fgetc(stream_);
+    if (ch == '\n') { ++line_; }
+    return ch;
   }
 
   int append_char(common::ObSqlString &field, int ch)
@@ -190,6 +202,9 @@ private:
   char quote_;
   char escape_;
   common::ObString null_text_;
+  int64_t line_;
+  int64_t record_line_;
+  int64_t record_;
 };
 
 } // namespace sql

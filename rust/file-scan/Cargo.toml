@@ -1,0 +1,19 @@
+[package]
+name = "file-scan"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "file_scan"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+cxx = "1"
+parquet = { version = "=57.0.0", default-features = false, features = ["snap"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+cxx-build = "1"

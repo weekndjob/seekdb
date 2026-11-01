@@ -24,12 +24,15 @@
 
 namespace oceanbase
 {
+namespace pl { class ObPLCollection; }
 namespace sql
 {
 
 class ObExpr;
 struct FileScanDefinition;
 class JsonlRecordReader;
+class FileGlobReader;
+class FileParquetReader;
 class ObFunctionTableSpec : public ObOpSpec
 {
 OB_UNIS_VERSION_V(1);
@@ -56,7 +59,7 @@ public:
     row_count_(0),
     col_count_(0),
     value_table_(NULL), file_reader_(nullptr), file_column_count_(0),
-    file_definition_(nullptr), json_reader_(nullptr)
+    file_definition_(nullptr), json_reader_(nullptr), glob_reader_(nullptr), parquet_reader_(nullptr)
   {}
 
   virtual int inner_open() override;
@@ -86,6 +89,8 @@ private:
   common::ObArenaAllocator file_scan_allocator_;
   FileScanDefinition *file_definition_;
   JsonlRecordReader *json_reader_;
+  FileGlobReader *glob_reader_;
+  FileParquetReader *parquet_reader_;
   int (ObFunctionTableOp::*next_row_func_)();
 };
 

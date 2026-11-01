@@ -38,7 +38,11 @@ public:
         break;
       }
       if (ch == '\n') { break; }
-      if (record.length() >= max_record_bytes_) { return OB_SIZE_OVERFLOW; }
+      if (record.length() >= max_record_bytes_) {
+        OB_LOGGER.log_user_message(ObLogger::USER_ERROR, OB_SIZE_OVERFLOW,
+            "JSONL record at line %ld exceeds the record size limit", line_+1);
+        return OB_SIZE_OVERFLOW;
+      }
       const char byte = static_cast<char>(ch);
       if (OB_FAIL(record.append(&byte, 1))) { return ret; }
     }
@@ -54,7 +58,10 @@ public:
                                      | rapidjson::kParseNumbersAsStringsFlag>(input, handler);
     ret = handler.error_;
     if (ret == OB_SUCCESS && (!parsed || !handler.complete_)) { ret = OB_INVALID_DATA; }
-    if (ret != OB_SUCCESS) { fields.reset(); }
+    if (ret != OB_SUCCESS) {
+      OB_LOGGER.log_user_message(ObLogger::USER_ERROR, ret, "Invalid or unsupported JSONL object at line %ld", line_);
+      fields.reset();
+    }
     return ret;
   }
 private:
@@ -68,7 +75,8 @@ private:
     bool Key(const char *text, rapidjson::SizeType length, bool)
     {
       using namespace common;
-      if (!started_ || complete_ || has_key_ || fields_.count() >= limit_) { return false; }
+      if (fields_.count() >= limit_) { error_ = OB_SIZE_OVERFLOW; return false; }
+      if (!started_ || complete_ || has_key_) { return false; }
       const ObString name(length, text);
       for (int64_t i = 0; i < fields_.count(); ++i) {
         if (name.case_compare(fields_.at(i).name_) == 0) { return false; }
@@ -96,6 +104,7 @@ private:
     {
       using namespace common;
       if (!has_key_ || complete_) { return false; }
+      if (text.length() > 16*1024*1024) { error_ = OB_SIZE_OVERFLOW; return false; }
       JsonFileField field{key_, CsvField{ObString(), quoted}, type};
       error_ = ob_write_string(allocator_, text, field.field_.value_);
       if (error_ == OB_SUCCESS) { error_ = fields_.push_back(field); }

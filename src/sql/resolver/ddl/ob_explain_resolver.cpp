@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_explain_resolver.h"
 #include "sql/resolver/ob_resolver.h"
+#include "sql/resolver/dml/ob_select_resolver.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -29,6 +30,38 @@ const static int64_t EXPLAIN_CHILD_STMT = 4;
 int ObExplainResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  // Lower the file-schema command to a native metadata scan. Keeping the file
+  // scan in the resulting plan preserves security and file identity checks on
+  // execution, including cached plans, without executing the input query.
+  if (parse_tree.type_ == T_EXPLAIN && parse_tree.num_child_ == 5 && parse_tree.value_ == 1) {
+    ParseNode *select = parse_tree.children_[EXPLAIN_CHILD_STMT];
+    if (select && select->type_ == T_SELECT && select->num_child_ >= PARSE_SELECT_MAX_IDX) {
+      ParseNode *from = select->children_[PARSE_SELECT_FROM];
+      ParseNode *project = select->children_[PARSE_SELECT_SELECT];
+      if (from && from->num_child_ == 1 && from->children_[0]
+          && from->children_[0]->type_ == T_FILE_TABLE_EXPRESSION) {
+        if (!project || project->num_child_ != 1 || !project->children_[0]
+            || project->children_[0]->type_ != T_PROJECT_STRING
+            || project->children_[0]->num_child_ != 1 || !project->children_[0]->children_[0]
+            || project->children_[0]->children_[0]->type_ != T_STAR) {
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "file DESCRIBE projections other than SELECT *");
+          return OB_NOT_SUPPORTED;
+        }
+        for (int i = 0; i < select->num_child_; ++i) {
+          if (i != PARSE_SELECT_FROM && i != PARSE_SELECT_SELECT && i != PARSE_SELECT_HINTS
+              && select->children_[i] != nullptr) {
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "clauses in file DESCRIBE");
+            return OB_NOT_SUPPORTED;
+          }
+        }
+        from->children_[0]->value_ = 1;
+        ObSelectResolver metadata(params_);
+        ret = metadata.resolve(*select);
+        if (ret == OB_SUCCESS) { set_basic_stmt(metadata.get_basic_stmt()); }
+        return ret;
+      }
+    }
+  }
   ObExplainStmt *explain_stmt = NULL;
   if (!(T_EXPLAIN == parse_tree.type_  && 5 == parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;

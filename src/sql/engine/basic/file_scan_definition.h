@@ -10,8 +10,9 @@ namespace oceanbase { namespace sql {
 struct FileScanDefinition
 {
   enum Format : int64_t { CSV = 0, JSONL = 1, PARQUET = 2, GLOB = 3 };
-  int64_t version_ = 1;
+  int64_t version_ = 2;
   int64_t format_ = CSV;
+  bool describe_ = false;
   bool header_ = true;
   int64_t delimiter_ = ',';
   int64_t quote_ = '"';
@@ -27,6 +28,7 @@ struct FileScanDefinition
     int ret = common::OB_SUCCESS;
     OB_UNIS_ENCODE(version_);
     OB_UNIS_ENCODE(format_);
+    OB_UNIS_ENCODE(describe_);
     OB_UNIS_ENCODE(header_);
     OB_UNIS_ENCODE(delimiter_);
     OB_UNIS_ENCODE(quote_);
@@ -43,6 +45,7 @@ struct FileScanDefinition
     int64_t len = 0;
     OB_UNIS_ADD_LEN(version_);
     OB_UNIS_ADD_LEN(format_);
+    OB_UNIS_ADD_LEN(describe_);
     OB_UNIS_ADD_LEN(header_);
     OB_UNIS_ADD_LEN(delimiter_);
     OB_UNIS_ADD_LEN(quote_);
@@ -58,7 +61,9 @@ struct FileScanDefinition
   {
     int ret = common::OB_SUCCESS;
     OB_UNIS_DECODE(version_);
+    if (ret != common::OB_SUCCESS || version_ != 2) { return common::OB_INVALID_DATA; }
     OB_UNIS_DECODE(format_);
+    OB_UNIS_DECODE(describe_);
     OB_UNIS_DECODE(header_);
     OB_UNIS_DECODE(delimiter_);
     OB_UNIS_DECODE(quote_);
@@ -68,7 +73,7 @@ struct FileScanDefinition
     OB_UNIS_DECODE(columns_);
     OB_UNIS_DECODE(types_);
     OB_UNIS_DECODE(nullable_);
-    if (ret == common::OB_SUCCESS && (version_ != 1 || format_ < CSV || format_ > GLOB
+    if (ret == common::OB_SUCCESS && (version_ != 2 || format_ < CSV || format_ > GLOB
         || identity_.count() != 7 || columns_.count() < 1 || columns_.count() > 1024
         || columns_.count() != types_.count() || columns_.count() != nullable_.count())) {
       ret = common::OB_INVALID_DATA;

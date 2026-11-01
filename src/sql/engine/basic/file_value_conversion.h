@@ -10,6 +10,20 @@ namespace oceanbase { namespace sql {
 class FileValueConversion
 {
 public:
+  static const char *type_name(common::ObObjType type)
+  {
+    using namespace common;
+    switch (type) {
+      case ObNullType: return "NULL";
+      case ObIntType: return "BIGINT";
+      case ObDoubleType: return "DOUBLE";
+      case ObTinyIntType: return "BOOLEAN";
+      case ObVarcharType: return "VARCHAR";
+      case ObDateType: return "DATE";
+      case ObDateTimeType: return "DATETIME";
+      default: return "UNKNOWN";
+    }
+  }
   static bool integer(common::ObString value, int64_t &result)
   {
     value = value.trim();

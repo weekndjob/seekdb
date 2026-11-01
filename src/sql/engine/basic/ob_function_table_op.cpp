@@ -22,6 +22,9 @@
 #include "sql/engine/basic/file_value_conversion.h"
 #include "sql/engine/basic/file_scan_definition.h"
 #include "sql/engine/basic/file_jsonl_reader.h"
+#include "sql/engine/basic/file_glob_reader.h"
+#include "sql/engine/basic/file_parquet_reader.h"
+#include "pl/ob_pl_user_type.h"
 
 
 namespace oceanbase
@@ -43,6 +46,7 @@ int ObFunctionTableOp::inner_open()
   } else if (MY_SPEC.file_scan_) {
     next_row_func_ = &ObFunctionTableOp::inner_get_next_row_file;
     ret = open_file_scan();
+    if (ret != OB_SUCCESS) { close_file_scan(); }
   } else if (ObExtendType == MY_SPEC.value_expr_->datum_meta_.type_) {
     next_row_func_ = &ObFunctionTableOp::inner_get_next_row_udf;
   } else {
@@ -93,6 +97,8 @@ void ObFunctionTableOp::close_file_scan()
 {
   if (file_reader_) { file_reader_->~CsvRecordReader(); file_reader_ = nullptr; }
   if (json_reader_) { json_reader_->~JsonlRecordReader(); json_reader_ = nullptr; }
+  if (glob_reader_) { glob_reader_->~FileGlobReader(); glob_reader_ = nullptr; }
+  if (parquet_reader_) { parquet_reader_->~FileParquetReader(); parquet_reader_ = nullptr; }
   if (file_definition_) { file_definition_->~FileScanDefinition(); file_definition_ = nullptr; }
   file_source_.close();
   file_scan_allocator_.reuse();
@@ -116,15 +122,23 @@ int ObFunctionTableOp::open_file_scan()
   } else if (OB_FAIL(MY_SPEC.value_expr_->eval(eval_ctx_, path))) {
   } else if (OB_ISNULL(path) || path->is_null()) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(file_source_.open(root, path->get_string()))) {
   } else {
     void *memory = file_scan_allocator_.alloc(sizeof(FileScanDefinition));
     if (memory == nullptr) { return OB_ALLOCATE_MEMORY_FAILED; }
     file_definition_ = new (memory) FileScanDefinition();
     if (OB_FAIL(file_definition_->decode(MY_SPEC.file_scan_definition_))) { return ret; }
-    if (OB_FAIL(file_source_.matches_identity(file_definition_->identity_))) { return ret; }
-    file_column_count_ = file_definition_->columns_.count();
+    node_idx_ = 0;
+    file_column_count_ = file_definition_->describe_ ? 6 : file_definition_->columns_.count();
     file_row_allocator_.reuse();
+    if (file_definition_->format_ == FileScanDefinition::GLOB) {
+      memory = file_scan_allocator_.alloc(sizeof(FileGlobReader));
+      if (!memory) { return OB_ALLOCATE_MEMORY_FAILED; }
+      glob_reader_ = new (memory) FileGlobReader();
+      return glob_reader_->open(root, path->get_string());
+    }
+    if (OB_FAIL(file_source_.open(root, path->get_string()))) { return ret; }
+    if (OB_FAIL(file_source_.matches_identity(file_definition_->identity_))) { return ret; }
+    if (file_definition_->describe_) { return file_source_.check_unchanged(); }
     if (file_definition_->format_ == FileScanDefinition::CSV) {
       file_reader_ = new (file_reader_storage_) CsvRecordReader(file_source_.stream(), file_row_allocator_,
           16*1024*1024, 64*1024*1024, 1024, file_definition_->delimiter_,
@@ -140,6 +154,13 @@ int ObFunctionTableOp::open_file_scan()
       memory = file_scan_allocator_.alloc(sizeof(JsonlRecordReader));
       if (!memory) { ret = OB_ALLOCATE_MEMORY_FAILED; }
       else { json_reader_ = new (memory) JsonlRecordReader(file_source_.stream(), file_row_allocator_); }
+    } else if (file_definition_->format_ == FileScanDefinition::PARQUET) {
+      memory = file_scan_allocator_.alloc(sizeof(FileParquetReader));
+      if (!memory) { ret = OB_ALLOCATE_MEMORY_FAILED; }
+      else {
+        parquet_reader_ = new (memory) FileParquetReader();
+        ret = parquet_reader_->open(file_source_, &MY_SPEC.file_column_indexes_);
+      }
     } else { ret = OB_NOT_SUPPORTED; }
     if (OB_SUCC(ret)) {
       ret = file_source_.check_unchanged();
@@ -155,11 +176,29 @@ int ObFunctionTableOp::inner_get_next_row_file()
   file_row_allocator_.reuse();
   ObArray<CsvField> fields;
   if (OB_FAIL(ctx_.check_status())) {
-  } else if (OB_ISNULL(file_definition_) || (file_reader_ == nullptr && json_reader_ == nullptr)) {
+  } else if (OB_ISNULL(file_definition_)
+             || (!file_definition_->describe_ && file_reader_ == nullptr && json_reader_ == nullptr
+                 && glob_reader_ == nullptr && parquet_reader_ == nullptr)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(file_source_.check_unchanged())) {
+  } else if (!glob_reader_ && OB_FAIL(file_source_.check_unchanged())) {
   } else {
-    if (file_reader_) { ret = file_reader_->next(fields); }
+    if (file_definition_->describe_) {
+      if (node_idx_ >= file_definition_->columns_.count()) { ret = OB_ITER_END; }
+      else {
+        CsvField description[] = {
+          {file_definition_->columns_.at(node_idx_), true},
+          {ObString::make_string(FileValueConversion::type_name(static_cast<ObObjType>(file_definition_->types_.at(node_idx_)))), true},
+          {ObString::make_string(file_definition_->nullable_.at(node_idx_) ? "YES" : "NO"), true},
+          {ObString(), false}, {ObString(), false}, {ObString(), false}};
+        for (const CsvField &field : description) { if (OB_FAIL(fields.push_back(field))) { break; } }
+        ++node_idx_;
+      }
+    } else if (glob_reader_) {
+      ObString name;
+      if (OB_FAIL(glob_reader_->next(file_row_allocator_, name))) {
+      } else { ret = fields.push_back(CsvField{name, true}); }
+    } else if (parquet_reader_) { ret = parquet_reader_->next(file_row_allocator_, fields); }
+    else if (file_reader_) { ret = file_reader_->next(fields); }
     else {
       ObArray<JsonFileField> record;
       if (OB_FAIL(json_reader_->next(record))) {
@@ -177,7 +216,7 @@ int ObFunctionTableOp::inner_get_next_row_file()
       }
     }
     if (ret == OB_SUCCESS && fields.count() != file_column_count_) { ret = OB_INVALID_DATA; }
-    if (ret == OB_SUCCESS || ret == OB_ITER_END) {
+    if (!glob_reader_ && (ret == OB_SUCCESS || ret == OB_ITER_END)) {
       const int check = file_source_.check_unchanged();
       if (check != OB_SUCCESS) { ret = check; }
     }

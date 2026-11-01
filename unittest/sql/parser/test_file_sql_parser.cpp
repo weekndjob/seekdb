@@ -59,3 +59,34 @@ TEST(FileSqlParser, RejectsPositionalOptionsAndIncompleteSyntax)
     EXPECT_NE(OB_SUCCESS, parser.parse(ObString::make_string(sql), result)) << sql;
   }
 }
+
+TEST(FileSqlParser, DistinguishesDescribeFromExplainAndLowersCopyToNativeInto)
+{
+  for (const char *sql : {"describe select * from read_csv('/tmp/a.csv')",
+                          "explain select * from read_csv('/tmp/a.csv')"}) {
+    ObArenaAllocator arena;
+    ObParser parser(arena, 0);
+    ParseResult result;
+    ASSERT_EQ(OB_SUCCESS, parser.parse(ObString::make_string(sql), result));
+    const ParseNode *node = result.result_tree_->children_[0];
+    ASSERT_EQ(T_EXPLAIN, node->type_);
+    EXPECT_EQ(sql[0] == 'd' ? 1 : 0, node->value_);
+  }
+  const char *queries[] = {
+      "copy docs to '/tmp/out.csv'",
+      "copy (select id,name from read_csv('/tmp/a.csv') order by id) to '/tmp/out.csv' (format csv,header,nullstr 'NULL')",
+      "copy docs to '/tmp/out.csv' (header false,delimiter ';',quote '\"',escape '\"')"};
+  for (const char *sql : queries) {
+    ObArenaAllocator arena;
+    ObParser parser(arena, 0);
+    ParseResult result;
+    ASSERT_EQ(OB_SUCCESS, parser.parse(ObString::make_string(sql), result)) << sql;
+    const ParseNode *node = result.result_tree_->children_[0];
+    ASSERT_EQ(T_SELECT, node->type_);
+    const ParseNode *into = node->children_[PARSE_SELECT_INTO];
+    ASSERT_NE(nullptr, into);
+    EXPECT_EQ(T_INTO_OUTFILE, into->type_);
+    EXPECT_EQ(1, into->value_);
+    EXPECT_TRUE(into->is_tree_not_param_);
+  }
+}

@@ -8,6 +8,7 @@ target_link_libraries(ob_server PUBLIC config)
 add_library(oceanbase_static STATIC EXCLUDE_FROM_ALL
   ${CMAKE_CURRENT_BINARY_DIR}/ob_version.cpp)
 target_link_libraries(oceanbase_static PUBLIC
+  file_scan
   ob_base
   "${ob_objects}"
   ob_sql_static
@@ -56,6 +57,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
       -Wl,--no-whole-archive
       sql_nio
       -static-libgcc
+      file_scan
       -static-libstdc++)
   endif()
 
@@ -96,6 +98,7 @@ target_link_libraries(seekdb PRIVATE
   ob_share_static
   sql_nio
   $<$<PLATFORM_ID:Windows>:ob_malloc>
+  file_scan
   $<$<PLATFORM_ID:Windows>:synchronization>
   $<$<AND:$<NOT:$<PLATFORM_ID:Darwin,iOS>>,$<NOT:$<PLATFORM_ID:Windows>>>:-Wl,--end-group>
   $<$<PLATFORM_ID:Linux>:-static-libgcc>
