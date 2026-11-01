@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "config_bridge.h"
 #include "ob_ddl_resolver.h"
+#include "sql/resolver/ddl/ai_column_definition.h"
 #include "data_plane/blocksstable/ob_index_block_util.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/ddl/ob_index_builder_util.h"
@@ -1777,8 +1778,13 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                   && OB_DDL_MODIFY_COLUMN == (static_cast<AlterColumnSchema &>(column)).alter_type_;
   ParseNode *column_definition_ref_node = NULL;
   if (node != nullptr && node->type_ == T_COLUMN_DEFINITION && node->num_child_ == 8) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "AI COLUMN metadata and asynchronous execution are not implemented");
+    AiColumnDefinition definition;
+    if (OB_FAIL(validate_ai_column_definition(*node, definition))) {
+      SQL_RESV_LOG(WARN, "invalid AI column definition", K(ret));
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "AI COLUMN metadata and asynchronous execution are not implemented");
+    }
   } else if (T_COLUMN_DEFINITION != node->type_ || node->num_child_ < COLUMN_DEFINITION_NUM_CHILD ||
      OB_ISNULL(allocator_) || OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0]) ||
      T_COLUMN_REF != node->children_[0]->type_ ||
