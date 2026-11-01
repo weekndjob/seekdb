@@ -499,6 +499,7 @@ END_P SET_VAR DELIMITER
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> vec_index_params vec_index_param vec_index_param_value opt_with_vector_index_parameters
 %type <node> copy_file_stmt opt_file_copy_options file_copy_options file_copy_option file_copy_value
+%type <node> opt_ai_column_options
 %type <node> file_table_expr file_table_name
 %type <node> json_table_expr unnest_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
@@ -4836,7 +4837,15 @@ SIMPLE { $$[0] = T_SIMPLE; }
 ;
 
 column_definition:
-column_definition_ref data_type opt_column_attribute_list opt_column_reference opt_position_column
+column_definition_ref data_type AI COLUMN '(' expr ')' opt_ai_column_options opt_position_column
+{
+  ParseNode *attributes = NULL;
+  set_data_type_collation($2, attributes, false, true);
+  dup_expr_string($6, result, @6.first_column, @6.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 8,
+                           $1, $2, attributes, $9, $6, $8, NULL, NULL);
+}
+| column_definition_ref data_type opt_column_attribute_list opt_column_reference opt_position_column
 {
   (void)($4);
   ParseNode *attributes = NULL;
@@ -4879,6 +4888,11 @@ column_definition_ref data_type opt_column_attribute_list opt_column_reference o
   merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, attributes);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 4, $1, unsigned_bigint_type, attributes, $4);
 }
+;
+
+opt_ai_column_options:
+/* empty */ { $$ = NULL; }
+| WITH '(' expr_list ')' { $$ = $3; }
 ;
 
 constraint_definition:
