@@ -3,6 +3,7 @@
 #include "sql/resolver/ddl/ai_column_definition.h"
 #include "lib/allocator/ob_allocator.h"
 #include <gtest/gtest.h>
+#include "lib/container/ob_se_array.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -66,4 +67,19 @@ TEST(AIColumnParser, ValidatesFunctionAndOptions)
       EXPECT_GT(definition.model.length(), 0);
     }
   }
+}
+
+TEST(AIColumnParser, FindsDistinctDependenciesInExpressions)
+{
+  const char *sql = "CREATE TABLE docs(content VARCHAR(200), title VARCHAR(100), "
+    "tags JSON AI COLUMN (AI_COMPLETE('model', CONCAT(content, 'title', CONTENT, title))))";
+  ObArenaAllocator allocator; ObParser parser(allocator, SMO_DEFAULT); ParseResult result;
+  ASSERT_EQ(OB_SUCCESS, parser.parse(ObString::make_string(sql), result));
+  const ParseNode *column = ai_column_definition(result.result_tree_);
+  ASSERT_NE(nullptr, column);
+  ObSEArray<AiColumnReference, 4> refs;
+  ASSERT_EQ(OB_SUCCESS, collect_ai_column_references(*column->children_[4], refs));
+  ASSERT_EQ(2, refs.count());
+  EXPECT_EQ(0, refs.at(0).column.case_compare("content"));
+  EXPECT_EQ(0, refs.at(1).column.case_compare("title"));
 }

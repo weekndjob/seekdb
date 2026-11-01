@@ -1779,8 +1779,11 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
   ParseNode *column_definition_ref_node = NULL;
   if (node != nullptr && node->type_ == T_COLUMN_DEFINITION && node->num_child_ == 8) {
     AiColumnDefinition definition;
+    ObSEArray<AiColumnReference, 4> references;
     if (OB_FAIL(validate_ai_column_definition(*node, definition))) {
       SQL_RESV_LOG(WARN, "invalid AI column definition", K(ret));
+    } else if (OB_FAIL(collect_ai_column_references(*node->children_[4], references))) {
+      SQL_RESV_LOG(WARN, "invalid AI column dependency expression", K(ret));
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "AI COLUMN metadata and asynchronous execution are not implemented");

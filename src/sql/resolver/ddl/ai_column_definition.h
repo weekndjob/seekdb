@@ -4,6 +4,7 @@
 #include "sql/parser/parse_node.h"
 #include "lib/string/ob_string.h"
 #include "lib/ob_errno.h"
+#include "lib/container/ob_iarray.h"
 
 namespace oceanbase { namespace sql {
 
@@ -62,6 +63,52 @@ inline int validate_ai_column_definition(const ParseNode &column, AiColumnDefini
         seen_retries = true;
         out.max_retries = value.value_;
       } else return OB_NOT_SUPPORTED;
+    }
+  }
+  return OB_SUCCESS;
+}
+
+// Collect distinct column references from the expression tree. Literals and
+// function names are not dependencies. Views refer to the parser's allocator.
+struct AiColumnReference {
+  common::ObString database;
+  common::ObString table;
+  common::ObString column;
+};
+
+inline int collect_ai_column_references(const ParseNode &node,
+                                        common::ObIArray<AiColumnReference> &out,
+                                        const int64_t depth = 0)
+{
+  using namespace common;
+  if (depth > 128) return OB_SIZE_OVERFLOW;
+  if (node.type_ == T_COLUMN_REF) {
+    if (node.num_child_ != 3 || node.children_ == nullptr || node.children_[2] == nullptr ||
+        node.children_[2]->str_value_ == nullptr || node.children_[2]->str_len_ <= 0)
+      return OB_INVALID_ARGUMENT;
+    AiColumnReference ref;
+    for (int64_t i = 0; i < 3; ++i) {
+      const ParseNode *part = node.children_[i];
+      if (part != nullptr) {
+        if (part->str_value_ == nullptr || part->str_len_ <= 0) return OB_INVALID_ARGUMENT;
+        ObString value(part->str_len_, part->str_value_);
+        if (i == 0) ref.database = value;
+        else if (i == 1) ref.table = value;
+        else ref.column = value;
+      }
+    }
+    for (int64_t i = 0; i < out.count(); ++i) {
+      if (out.at(i).database.case_compare(ref.database) == 0 &&
+          out.at(i).table.case_compare(ref.table) == 0 &&
+          out.at(i).column.case_compare(ref.column) == 0) return OB_SUCCESS;
+    }
+    return out.push_back(ref);
+  }
+  if (node.num_child_ > 0 && node.children_ == nullptr) return OB_INVALID_ARGUMENT;
+  for (int64_t i = 0; i < node.num_child_; ++i) {
+    if (node.children_[i] != nullptr) {
+      const int ret = collect_ai_column_references(*node.children_[i], out, depth + 1);
+      if (ret != OB_SUCCESS) return ret;
     }
   }
   return OB_SUCCESS;
