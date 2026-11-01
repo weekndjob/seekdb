@@ -2240,6 +2240,7 @@ int ObLogPlan::allocate_function_table_path(FunctionTablePath *func_table_path,
   } else {
     op->set_table_id(func_table_path->table_id_);
     op->add_values_expr(func_table_path->value_expr_);
+    op->set_file_scan(table_item->is_file_table());
     op->set_table_name(table_item->get_table_name());
     if (OB_FAIL(append(op->get_filter_exprs(), func_table_path->filter_))) {
     } else if (OB_FAIL(op->compute_property(func_table_path))) {

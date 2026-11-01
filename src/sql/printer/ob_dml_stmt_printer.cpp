@@ -23,6 +23,7 @@
 #include "lib/charset/ob_charset.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/monitor/ob_sql_plan.h"
+#include "sql/engine/basic/file_scan_definition.h"
 namespace oceanbase
 {
 using namespace common;
@@ -302,6 +303,34 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
         }
         break;
       }
+    case TableItem::FILE_TABLE: {
+      FileScanDefinition definition;
+      OZ (definition.decode(table_item->file_scan_definition_));
+      DATA_PRINTF("%.*s(", table_item->table_name_.length(), table_item->table_name_.ptr());
+      OZ (expr_printer_.do_print(table_item->function_table_expr_, T_FROM_SCOPE));
+      if (OB_SUCC(ret) && definition.format_ == FileScanDefinition::CSV) {
+        DATA_PRINTF(", header=%s, delimiter=", definition.header_ ? "true" : "false");
+        const char bytes[] = {static_cast<char>(definition.delimiter_), static_cast<char>(definition.quote_),
+                              static_cast<char>(definition.escape_)};
+        const char *names[] = {"", ", quote=", ", escape="};
+        for (int i = 0; OB_SUCC(ret) && i < 3; ++i) {
+          DATA_PRINTF("%s", names[i]);
+          ObObj value;
+          value.set_varchar(ObString(1, &bytes[i]));
+          OZ (value.print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+        }
+        DATA_PRINTF(", nullstr=");
+        ObObj value;
+        value.set_varchar(definition.null_text_);
+        OZ (value.print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+      }
+      DATA_PRINTF(")");
+      if (!table_item->alias_name_.empty()) {
+        DATA_PRINTF(" ");
+        PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
+      }
+      break;
+    }
     case TableItem::FUNCTION_TABLE: {
       DATA_PRINTF("TABLE(");
       OZ (expr_printer_.do_print(table_item->function_table_expr_, T_FROM_SCOPE));

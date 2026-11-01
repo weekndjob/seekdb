@@ -25,10 +25,14 @@ class CsvRecordReader
 {
 public:
   CsvRecordReader(FILE *stream, common::ObIAllocator &allocator,
-                  int64_t max_field_bytes, int64_t max_record_bytes, int64_t max_columns)
+                  int64_t max_field_bytes, int64_t max_record_bytes, int64_t max_columns,
+                  char delimiter = ',', char quote = '"', char escape = '"',
+                  common::ObString null_text = common::ObString())
     : stream_(stream), allocator_(allocator), max_field_bytes_(max_field_bytes),
       max_record_bytes_(max_record_bytes), max_columns_(max_columns), initialized_(false),
-      pending_count_(0), pending_index_(0), pending_{} {}
+      pending_count_(0), pending_index_(0), pending_{}, delimiter_(delimiter), quote_(quote),
+      escape_(escape), null_text_(null_text) {}
+  void set_null_text(const common::ObString &value) { null_text_ = value; }
 
   int next(common::ObIArray<CsvField> &fields)
   {
@@ -42,7 +46,9 @@ public:
     bool done = false;
     int64_t bytes = 0;
     fields.reset();
-    if (stream_ == nullptr || max_field_bytes_ < 1 || max_record_bytes_ < 1 || max_columns_ < 1) {
+    if (stream_ == nullptr || max_field_bytes_ < 1 || max_record_bytes_ < 1 || max_columns_ < 1
+        || delimiter_ == 0 || delimiter_ == '\n' || delimiter_ == '\r' || delimiter_ == quote_
+        || quote_ == 0 || quote_ == '\n' || quote_ == '\r' || escape_ == 0) {
       ret = OB_INVALID_ARGUMENT;
     }
     while (OB_SUCC(ret) && !done) {
@@ -63,15 +69,21 @@ public:
       } else {
         saw_byte = true;
         if (state == QUOTED) {
-          if (ch == '"') {
+          if (escape_ != quote_ && ch == escape_) {
+            const int escaped = read_char();
+            if (escaped == EOF) { ret = std::ferror(stream_) ? OB_IO_ERROR : OB_INVALID_DATA; }
+            else if (++bytes > max_record_bytes_) { ret = OB_SIZE_OVERFLOW; }
+            else if (escaped != quote_ && escaped != escape_) { ret = OB_INVALID_DATA; }
+            else { ret = append_char(field, escaped); }
+          } else if (ch == quote_) {
             state = AFTER_QUOTE;
           } else if (OB_FAIL(append_char(field, ch))) {
           }
-        } else if (state == AFTER_QUOTE && ch == '"') {
+        } else if (state == AFTER_QUOTE && ch == quote_ && escape_ == quote_) {
           state = QUOTED;
           if (OB_FAIL(append_char(field, ch))) {
           }
-        } else if (ch == ',' || ch == '\n' || ch == '\r') {
+        } else if (ch == delimiter_ || ch == '\n' || ch == '\r') {
           if (ch == '\r') {
             const int next = read_char();
             if (next == EOF && std::ferror(stream_)) {
@@ -84,17 +96,17 @@ public:
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(append_field(field, was_quoted, fields))) {
-          } else if (ch == ',') {
+          } else if (ch == delimiter_) {
             state = START;
             was_quoted = false;
             field.reuse();
           } else {
             done = true;
           }
-        } else if (state == START && ch == '"') {
+        } else if (state == START && ch == quote_) {
           state = QUOTED;
           was_quoted = true;
-        } else if (ch == '"' || state == AFTER_QUOTE) {
+        } else if (ch == quote_ || state == AFTER_QUOTE) {
           ret = OB_INVALID_DATA;
         } else {
           state = UNQUOTED;
@@ -155,6 +167,10 @@ private:
     } else if (OB_FAIL(ob_write_string(allocator_, value, result.value_))) {
     } else {
       result.quoted_ = quoted;
+      if (!quoted && !null_text_.empty()) {
+        if (value == null_text_) { result.value_.reset(); }
+        else if (value.empty()) { result.quoted_ = true; }
+      }
       if (OB_FAIL(fields.push_back(result))) {
       }
     }
@@ -170,6 +186,10 @@ private:
   int pending_count_;
   int pending_index_;
   unsigned char pending_[3];
+  char delimiter_;
+  char quote_;
+  char escape_;
+  common::ObString null_text_;
 };
 
 } // namespace sql

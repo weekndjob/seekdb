@@ -5510,6 +5510,14 @@ int ObStaticEngineCG::generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec 
   } else if (OB_FAIL(generate_rt_expr(*value_raw_expr, value_expr))) {
   } else {
     spec.has_correlated_expr_ = value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
+    spec.file_scan_ = op.is_file_scan();
+    if (spec.file_scan_ && OB_FAIL(spec.file_column_indexes_.init(op.get_stmt()->get_column_size()))) {
+    }
+    if (OB_SUCC(ret) && spec.file_scan_) {
+      const TableItem *table = op.get_stmt()->get_table_item_by_id(op.get_table_id());
+      if (OB_ISNULL(table)) { ret = OB_ERR_UNEXPECTED; }
+      else { ret = ob_write_string(alloc, table->file_scan_definition_, spec.file_scan_definition_); }
+    }
     spec.value_expr_ = value_expr;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_output_exprs().count(); ++i) {
       if (OB_FAIL(mark_expr_self_produced(op.get_output_exprs().at(i)))) {
@@ -5526,6 +5534,9 @@ int ObStaticEngineCG::generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec 
         OZ (mark_expr_self_produced(col_item->expr_));
         OZ (generate_rt_expr(*col_item->expr_, rt_expr));
         OZ (spec.column_exprs_.push_back(rt_expr));
+        if (spec.file_scan_) {
+          OZ (spec.file_column_indexes_.push_back(col_item->column_id_ - OB_APP_MIN_COLUMN_ID));
+        }
       }
     }
   }

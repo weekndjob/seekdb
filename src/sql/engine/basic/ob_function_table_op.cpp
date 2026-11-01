@@ -19,6 +19,9 @@
 #include "sql/engine/basic/ob_function_table_op.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/basic/file_value_conversion.h"
+#include "sql/engine/basic/file_scan_definition.h"
+#include "sql/engine/basic/file_jsonl_reader.h"
 
 
 namespace oceanbase
@@ -27,7 +30,8 @@ using namespace common;
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER((ObFunctionTableSpec, ObOpSpec), value_expr_, column_exprs_, has_correlated_expr_);
+OB_SERIALIZE_MEMBER((ObFunctionTableSpec, ObOpSpec), value_expr_, column_exprs_, has_correlated_expr_,
+                    file_scan_, file_column_indexes_, file_scan_definition_);
 
 int ObFunctionTableOp::inner_open()
 {
@@ -36,6 +40,9 @@ int ObFunctionTableOp::inner_open()
   already_calc_ = false;
   if (OB_ISNULL(MY_SPEC.value_expr_)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (MY_SPEC.file_scan_) {
+    next_row_func_ = &ObFunctionTableOp::inner_get_next_row_file;
+    ret = open_file_scan();
   } else if (ObExtendType == MY_SPEC.value_expr_->datum_meta_.type_) {
     next_row_func_ = &ObFunctionTableOp::inner_get_next_row_udf;
   } else {
@@ -48,6 +55,9 @@ int ObFunctionTableOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOperator::inner_rescan())) {
+  } else if (MY_SPEC.file_scan_) {
+    close_file_scan();
+    ret = open_file_scan();
   } else {
     node_idx_ = 0;
     if (MY_SPEC.has_correlated_expr_) {
@@ -63,6 +73,7 @@ int ObFunctionTableOp::inner_rescan()
 int ObFunctionTableOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  close_file_scan();
   node_idx_ = 0;
   row_count_ = 0;
   col_count_ = 0;
@@ -72,7 +83,120 @@ int ObFunctionTableOp::inner_close()
 
 void ObFunctionTableOp::destroy()
 {
+  inner_close();
+  file_row_allocator_.reset();
+  file_scan_allocator_.reset();
   ObOperator::destroy();
+}
+
+void ObFunctionTableOp::close_file_scan()
+{
+  if (file_reader_) { file_reader_->~CsvRecordReader(); file_reader_ = nullptr; }
+  if (json_reader_) { json_reader_->~JsonlRecordReader(); json_reader_ = nullptr; }
+  if (file_definition_) { file_definition_->~FileScanDefinition(); file_definition_ = nullptr; }
+  file_source_.close();
+  file_scan_allocator_.reuse();
+  file_row_allocator_.reuse();
+}
+
+int ObFunctionTableOp::open_file_scan()
+{
+  int ret = OB_SUCCESS;
+  bool enabled = false;
+  ObString root;
+  ObDatum *path = nullptr;
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_ENABLE_FILE_SQL, enabled))) {
+  } else if (!enabled) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "file SQL is disabled");
+  } else if (OB_FAIL(session->get_secure_file_priv(root))) {
+  } else if (OB_FAIL(MY_SPEC.value_expr_->eval(eval_ctx_, path))) {
+  } else if (OB_ISNULL(path) || path->is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(file_source_.open(root, path->get_string()))) {
+  } else {
+    void *memory = file_scan_allocator_.alloc(sizeof(FileScanDefinition));
+    if (memory == nullptr) { return OB_ALLOCATE_MEMORY_FAILED; }
+    file_definition_ = new (memory) FileScanDefinition();
+    if (OB_FAIL(file_definition_->decode(MY_SPEC.file_scan_definition_))) { return ret; }
+    if (OB_FAIL(file_source_.matches_identity(file_definition_->identity_))) { return ret; }
+    file_column_count_ = file_definition_->columns_.count();
+    file_row_allocator_.reuse();
+    if (file_definition_->format_ == FileScanDefinition::CSV) {
+      file_reader_ = new (file_reader_storage_) CsvRecordReader(file_source_.stream(), file_row_allocator_,
+          16*1024*1024, 64*1024*1024, 1024, file_definition_->delimiter_,
+          file_definition_->quote_, file_definition_->escape_,
+          file_definition_->header_ ? ObString() : file_definition_->null_text_);
+      if (file_definition_->header_) {
+        ObArray<CsvField> fields;
+        if (OB_FAIL(file_reader_->next(fields))) {
+        } else if (fields.count() != file_column_count_) { ret = OB_INVALID_DATA; }
+        file_reader_->set_null_text(file_definition_->null_text_);
+      }
+    } else if (file_definition_->format_ == FileScanDefinition::JSONL) {
+      memory = file_scan_allocator_.alloc(sizeof(JsonlRecordReader));
+      if (!memory) { ret = OB_ALLOCATE_MEMORY_FAILED; }
+      else { json_reader_ = new (memory) JsonlRecordReader(file_source_.stream(), file_row_allocator_); }
+    } else { ret = OB_NOT_SUPPORTED; }
+    if (OB_SUCC(ret)) {
+      ret = file_source_.check_unchanged();
+    }
+  }
+  return ret;
+}
+
+int ObFunctionTableOp::inner_get_next_row_file()
+{
+  int ret = OB_SUCCESS;
+  clear_evaluated_flag();
+  file_row_allocator_.reuse();
+  ObArray<CsvField> fields;
+  if (OB_FAIL(ctx_.check_status())) {
+  } else if (OB_ISNULL(file_definition_) || (file_reader_ == nullptr && json_reader_ == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(file_source_.check_unchanged())) {
+  } else {
+    if (file_reader_) { ret = file_reader_->next(fields); }
+    else {
+      ObArray<JsonFileField> record;
+      if (OB_FAIL(json_reader_->next(record))) {
+      } else if (OB_FAIL(fields.prepare_allocate(file_column_count_))) {
+      } else {
+        for (int64_t i = 0; i < file_column_count_; ++i) { fields.at(i) = CsvField{ObString(), false}; }
+        for (int64_t i = 0; OB_SUCC(ret) && i < record.count(); ++i) {
+          int64_t index = -1;
+          for (int64_t j = 0; j < file_column_count_; ++j) {
+            if (record.at(i).name_.case_compare(file_definition_->columns_.at(j)) == 0) { index = j; break; }
+          }
+          if (index < 0) { ret = OB_INVALID_DATA; }
+          else { fields.at(index) = record.at(i).field_; }
+        }
+      }
+    }
+    if (ret == OB_SUCCESS && fields.count() != file_column_count_) { ret = OB_INVALID_DATA; }
+    if (ret == OB_SUCCESS || ret == OB_ITER_END) {
+      const int check = file_source_.check_unchanged();
+      if (check != OB_SUCCESS) { ret = check; }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.column_exprs_.count(); ++i) {
+      const int64_t column = MY_SPEC.file_column_indexes_.at(i);
+      if (column < 0 || column >= fields.count()) {
+        ret = OB_INVALID_DATA;
+      } else {
+        ObExpr *expr = MY_SPEC.column_exprs_.at(i);
+        ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+        const CsvField &field = fields.at(column);
+        ObObj object;
+        if (OB_FAIL(FileValueConversion::convert(field, expr->obj_meta_.get_type(), object))) {
+        } else if (OB_FAIL(datum.from_obj(object, expr->obj_datum_map_))) {
+        } else { expr->set_evaluated_projected(eval_ctx_); }
+      }
+    }
+  }
+  return ret;
 }
 
 

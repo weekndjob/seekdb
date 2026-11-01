@@ -17,6 +17,9 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "config_bridge.h"
 #include "ob_dml_resolver.h"
+#include "sql/engine/basic/file_csv_table.h"
+#include "sql/engine/basic/file_value_conversion.h"
+#include "sql/engine/basic/file_table_schema.h"
 #include "sql/resolver/dml/ob_view_table_resolver.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
@@ -2712,6 +2715,10 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         }
         break;
       }
+      case T_FILE_TABLE_EXPRESSION: {
+        ret = resolve_file_table_item(*table_node, table_item);
+        break;
+      }
       case T_HYBRID_SEARCH_EXPRESSION: {
         if (OB_ISNULL(session_info_)) {
           ret = OB_INVALID_ARGUMENT;
@@ -3919,6 +3926,132 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
   } else if (OB_FAIL(json_table_infos_.push_back(root_col_def))) {
   } else if (OB_FAIL(resolve_json_table_column_item(*chil_col_node, item,
                                                     root_col_def, -1, id, cur_column_id))) {
+  }
+  return ret;
+}
+
+namespace {
+int resolve_file_options(const ParseNode *node, FileScanDefinition &definition)
+{
+  int ret = OB_SUCCESS;
+  ObArray<const ParseNode *> options;
+  ObArray<ObString> names;
+  while (node != nullptr && OB_SUCC(ret)) {
+    if (node->type_ != T_LINK_NODE || node->num_child_ != 2 || node->children_[1] == nullptr) {
+      return OB_INVALID_ARGUMENT;
+    }
+    if (options.count() >= 16) { return OB_SIZE_OVERFLOW; }
+    ret = options.push_back(node->children_[1]);
+    node = node->children_[0];
+  }
+  for (int64_t i = options.count()-1; OB_SUCC(ret) && i >= 0; --i) {
+    const ParseNode *option = options.at(i);
+    if (option->type_ != T_FILE_SQL_OPTION || option->num_child_ != 2
+        || option->children_[0] == nullptr || option->children_[1] == nullptr) { return OB_INVALID_ARGUMENT; }
+    const ParseNode &value = *option->children_[1];
+    const ObString name(option->children_[0]->str_len_, option->children_[0]->str_value_);
+    for (int64_t j = 0; j < names.count(); ++j) {
+      if (name.case_compare(names.at(j)) == 0) { return OB_INVALID_ARGUMENT; }
+    }
+    if (OB_FAIL(names.push_back(name))) { break; }
+    if (name.case_compare("sample_size") == 0) {
+      const bool all = (value.type_ == T_INT && value.value_ == -1)
+          || (value.type_ == T_OP_NEG && value.num_child_ == 1 && value.children_[0] != nullptr
+              && value.children_[0]->type_ == T_INT && value.children_[0]->value_ == 1);
+      if (!all) { ret = OB_NOT_SUPPORTED; LOG_USER_ERROR(OB_NOT_SUPPORTED, "sample_size other than -1"); }
+    } else if (name.case_compare("header") == 0) {
+      if (definition.format_ != FileScanDefinition::CSV || (value.type_ != T_BOOL && value.type_ != T_INT)
+          || (value.value_ != 0 && value.value_ != 1)) { ret = OB_INVALID_ARGUMENT; }
+      else { definition.header_ = value.value_ == 1; }
+    } else if (name.case_compare("format") == 0) {
+      const ObString format(value.str_len_, value.str_value_);
+      if (value.type_ != T_VARCHAR || definition.format_ != FileScanDefinition::JSONL
+          || (format.case_compare("newline_delimited") != 0 && format.case_compare("ndjson") != 0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "file format option");
+      }
+    } else if (definition.format_ == FileScanDefinition::CSV &&
+               (name.case_compare("delimiter") == 0 || name.case_compare("delim") == 0
+                || name.case_compare("quote") == 0 || name.case_compare("escape") == 0
+                || name.case_compare("nullstr") == 0)) {
+      if (value.type_ != T_VARCHAR) { ret = OB_INVALID_ARGUMENT; }
+      else if (name.case_compare("nullstr") == 0) { definition.null_text_.assign_ptr(value.str_value_, value.str_len_); }
+      else if (value.str_len_ != 1 || value.str_value_[0] <= 0) { ret = OB_INVALID_ARGUMENT; }
+      else if (name.case_compare("quote") == 0) { definition.quote_ = value.str_value_[0]; }
+      else if (name.case_compare("escape") == 0) { definition.escape_ = value.str_value_[0]; }
+      else { definition.delimiter_ = value.str_value_[0]; }
+    } else { ret = OB_INVALID_ARGUMENT; }
+  }
+  return ret;
+}
+}
+
+int ObDMLResolver::resolve_file_table_item(const ParseNode &node, TableItem *&result)
+{
+  int ret = OB_SUCCESS;
+  bool enabled = false;
+  TableItem *item = nullptr;
+  ObConstRawExpr *path_expr = nullptr;
+  ObString root, path;
+  CsvFileTable file;
+  FileScanDefinition definition;
+  FileTableSchema schema(definition, *allocator_);
+  if (node.num_child_ != 4 || node.children_[0] == nullptr || node.children_[1] == nullptr
+      || session_info_ == nullptr || get_stmt() == nullptr) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_ENABLE_FILE_SQL, enabled))) {
+  } else if (!enabled) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "file SQL is disabled");
+  } else if (node.children_[1]->type_ != T_VARCHAR || node.children_[1]->str_value_ == nullptr) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    const ObString name(node.children_[0]->str_len_, node.children_[0]->str_value_);
+    if (name.case_compare("read_csv") == 0) { definition.format_ = FileScanDefinition::CSV; }
+    else if (name.case_compare("read_json") == 0 || name.case_compare("read_ndjson") == 0) {
+      definition.format_ = FileScanDefinition::JSONL;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "file format");
+    }
+    path.assign_ptr(node.children_[1]->str_value_, node.children_[1]->str_len_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(resolve_file_options(node.children_[2], definition))) {
+    } else if (OB_FAIL(session_info_->get_secure_file_priv(root))) {
+    } else if (OB_FAIL(file.open(root, path))) {
+    } else if (OB_FAIL(schema.infer(file))) {
+    } else if (OB_ISNULL(item = get_stmt()->create_table_item(*allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_, ObVarcharType,
+                         path, CS_TYPE_UTF8MB4_BIN, path_expr))) {
+    } else if (OB_FAIL(definition.encode(*allocator_, item->file_scan_definition_))) {
+    } else {
+      item->table_id_ = generate_table_id();
+      item->type_ = TableItem::FILE_TABLE;
+      item->function_table_expr_ = path_expr;
+      item->table_name_ = name;
+      if (node.children_[3] != nullptr && node.children_[3]->str_len_ > 0) {
+        item->alias_name_.assign_ptr(node.children_[3]->str_value_, node.children_[3]->str_len_);
+      }
+      if (OB_FAIL(get_stmt()->add_table_item(session_info_, item))) {
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < definition.columns_.count(); ++i) {
+        ColumnItem *column = nullptr;
+        const ObObjType type = static_cast<ObObjType>(definition.types_.at(i));
+        ObObjMeta meta;
+        meta.set_type(type);
+        if (type == ObVarcharType) { meta.set_collation_type(CS_TYPE_UTF8MB4_BIN); }
+        ObAccuracy accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[type];
+        if (type == ObVarcharType) { accuracy.set_length(schema.length(i)); }
+        if (OB_FAIL(resolve_function_table_column_item(*item, meta, accuracy,
+                         definition.columns_.at(i), OB_APP_MIN_COLUMN_ID+i, column))) {
+        } else if (definition.nullable_.at(i) == 0) { column->expr_->set_result_flag(NOT_NULL_FLAG); }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    result = item;
+    column_namespace_checker_.set_dml_stmt(get_stmt());
   }
   return ret;
 }
@@ -6743,6 +6876,9 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   CK (OB_NOT_NULL(col_expr));
   OX (col_expr->set_ref_id(table_item.table_id_, column_id));
   OX (result_type.set_meta(meta_type));
+  if (table_item.is_file_table() && ob_is_string_or_lob_type(meta_type.get_type())) {
+    result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+  }
   OX (result_type.set_accuracy(accuracy));
   OX (col_expr->set_result_type(result_type));
   if (table_item.get_object_name().empty()) {
@@ -7475,7 +7611,14 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_item.function_table_expr_));
   if (OB_SUCC(ret)) {
-    if (table_item.function_table_expr_->get_result_type().is_ext()) {
+    if (table_item.is_file_table()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_stmt()->get_column_size(); ++i) {
+        const ColumnItem *column = get_stmt()->get_column_item(i);
+        if (column != nullptr && column->table_id_ == table_item.table_id_) {
+          ret = col_items.push_back(*column);
+        }
+      }
+    } else if (table_item.function_table_expr_->get_result_type().is_ext()) {
       ret = resolve_function_table_column_item_udf(table_item, col_items);
     } else {
       ret = resolve_function_table_column_item_sys_func(table_item, col_items);

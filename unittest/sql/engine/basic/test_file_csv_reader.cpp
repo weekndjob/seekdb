@@ -9,6 +9,28 @@ using namespace oceanbase::common;
 using oceanbase::sql::CsvField;
 using oceanbase::sql::CsvRecordReader;
 
+TEST(FileCsvReader, SupportsDelimiterEscapeAndExplicitNullText)
+{
+  FILE *file = std::tmpfile();
+  ASSERT_NE(nullptr, file);
+  const char input[] = "1;NULL;\"NULL\";\"a\\\"b\";\n";
+  std::fwrite(input, 1, sizeof(input)-1, file);
+  std::rewind(file);
+  ObArenaAllocator arena;
+  ObArray<CsvField> fields;
+  CsvRecordReader reader(file, arena, 1024, 4096, 8, ';', '"', '\\', ObString::make_string("NULL"));
+  ASSERT_EQ(OB_SUCCESS, reader.next(fields));
+  ASSERT_EQ(5, fields.count());
+  EXPECT_TRUE(fields.at(1).value_.empty());
+  EXPECT_FALSE(fields.at(1).quoted_);
+  EXPECT_EQ(0, fields.at(2).value_.compare("NULL"));
+  EXPECT_TRUE(fields.at(2).quoted_);
+  EXPECT_EQ(0, fields.at(3).value_.compare("a\"b"));
+  EXPECT_TRUE(fields.at(4).value_.empty());
+  EXPECT_TRUE(fields.at(4).quoted_);
+  std::fclose(file);
+}
+
 namespace {
 FILE *file_with(const std::string &bytes)
 {

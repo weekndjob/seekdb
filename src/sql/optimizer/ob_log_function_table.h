@@ -30,9 +30,11 @@ public:
         table_id_(OB_INVALID_ID),
         value_expr_(NULL),
         table_name_(),
-        access_exprs_() { }
+        access_exprs_(), file_scan_(false) { }
   virtual ~ObLogFunctionTable() {}
   void add_values_expr(ObRawExpr* expr) { value_expr_ = expr; }
+  void set_file_scan(bool value) { file_scan_ = value; }
+  bool is_file_scan() const { return file_scan_; }
   const ObRawExpr* get_value_expr() const { return value_expr_; }
   ObRawExpr* get_value_expr() { return value_expr_; }
   virtual uint64_t hash(uint64_t seed) const override;
@@ -56,6 +58,7 @@ private:
   ObRawExpr* value_expr_;
   common::ObString table_name_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
+  bool file_scan_;
   DISALLOW_COPY_AND_ASSIGN(ObLogFunctionTable);
 };
 }
