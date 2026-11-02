@@ -38,11 +38,11 @@ public:
   ObFTRangeDict(ObIAllocator &alloc,
                 ObFTCacheRangeContainer *range_container,
                 const ObFTDictDesc &desc)
-      : is_inited_(false), desc_(desc), range_alloc_(lib::ObMemAttr("Range Dict")),
-        range_dicts_(&range_alloc_), range_container_(range_container)
+      : is_inited_(false), desc_(desc), range_alloc_(alloc),
+        range_dicts_(0, &range_alloc_, lib::ObMemAttr("Range Dict")), range_container_(range_container)
   {
   }
-  ~ObFTRangeDict() override{};
+  ~ObFTRangeDict() override { destroy(); }
 
 public:
   struct ObFTRange final
@@ -92,9 +92,9 @@ private:
   {
     for (int64_t i = 0; i < range_dicts_.size(); i++) {
       range_dicts_[i].dict_->~ObIFTDict(); // destroy dict
+      range_alloc_.free(range_dicts_[i].dict_);
     }
     range_dicts_.reset();
-    range_alloc_.reset();
   }
 
   int find_first_char_range(const ObString &single_word, ObIFTDict *&dict) const;
@@ -103,8 +103,10 @@ private:
   static constexpr int DEFAULT_KEY_PER_RANGE = 50000; // by estimated
   bool is_inited_;
   ObFTDictDesc desc_;
-  ObArenaAllocator range_alloc_;
-  ObVector<ObFTRange, ObArenaAllocator> range_dicts_;
+  // Reuse the parser's allocator instead of constructing three independent
+  // page arenas per document. Only release this dictionary's own allocations.
+  ObWrapperAllocator range_alloc_;
+  ObVector<ObFTRange, ObWrapperAllocator> range_dicts_;
   ObFTCacheRangeContainer *range_container_; // only used to read cache
 
 private:

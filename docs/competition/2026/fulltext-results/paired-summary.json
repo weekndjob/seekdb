@@ -1,0 +1,142 @@
+{
+  "reference": "Submitted a582 binary on the same VM; not the official fixed baseline",
+  "candidate": "v9",
+  "pairs": [
+    {
+      "pair": "-v9",
+      "metrics": {
+        "build_ik_all_sec": {
+          "before": 9.782,
+          "after": 9.369,
+          "improvement": 0.042220404825189184
+        },
+        "build_ik_content_sec": {
+          "before": 7.613,
+          "after": 7.407,
+          "improvement": 0.02705897806383817
+        },
+        "build_beng_en_sec": {
+          "before": 3.871,
+          "after": 3.67,
+          "improvement": 0.051924567295272506
+        },
+        "tokenize_ik_avg_ms": {
+          "before": 0.2896,
+          "after": 0.2812,
+          "improvement": 0.029005524861878462
+        },
+        "tokenize_beng_avg_ms": {
+          "before": 0.185,
+          "after": 0.1893,
+          "improvement": -0.023243243243243228
+        },
+        "query_cn_avg_ms": {
+          "before": 2.2076,
+          "after": 2.7088,
+          "improvement": -0.22703388294980997
+        },
+        "query_beng_avg_ms": {
+          "before": 3.2516,
+          "after": 2.7699,
+          "improvement": 0.14814245294624184
+        },
+        "query_mixed_avg_ms": {
+          "before": 2.5669,
+          "after": 2.1672,
+          "improvement": 0.15571311698936463
+        },
+        "query_limit_avg_ms": {
+          "before": 2.9616,
+          "after": 2.7402,
+          "improvement": 0.07475688816855741
+        }
+      },
+      "categories": {
+        "build": 0.040401316728099955,
+        "tokenize": 0.002881140809317617,
+        "query": 0.03789464378858848
+      },
+      "mean_improvement": 0.02705903377533535
+    },
+    {
+      "pair": "-v9-repeat",
+      "metrics": {
+        "build_ik_all_sec": {
+          "before": 9.66,
+          "after": 9.674,
+          "improvement": -0.0014492753623187582
+        },
+        "build_ik_content_sec": {
+          "before": 7.611,
+          "after": 7.412,
+          "improvement": 0.026146367100249646
+        },
+        "build_beng_en_sec": {
+          "before": 3.875,
+          "after": 3.671,
+          "improvement": 0.052645161290322595
+        },
+        "tokenize_ik_avg_ms": {
+          "before": 0.299,
+          "after": 0.2627,
+          "improvement": 0.1214046822742475
+        },
+        "tokenize_beng_avg_ms": {
+          "before": 0.1855,
+          "after": 0.1691,
+          "improvement": 0.08840970350404309
+        },
+        "query_cn_avg_ms": {
+          "before": 2.3182,
+          "after": 2.0032,
+          "improvement": 0.13588128720559056
+        },
+        "query_beng_avg_ms": {
+          "before": 3.2357,
+          "after": 2.8054,
+          "improvement": 0.13298513459220562
+        },
+        "query_mixed_avg_ms": {
+          "before": 2.5688,
+          "after": 2.134,
+          "improvement": 0.16926191217689202
+        },
+        "query_limit_avg_ms": {
+          "before": 2.9446,
+          "after": 2.7634,
+          "improvement": 0.06153637166338388
+        }
+      },
+      "categories": {
+        "build": 0.02578075100941783,
+        "tokenize": 0.1049071928891453,
+        "query": 0.12491617640951802
+      },
+      "mean_improvement": 0.08520137343602706
+    }
+  ],
+  "source_sha256": {
+    "src/storage/fts/dict/ob_ft_range_dict.cpp": "85fbd45feebaf76cb7c65a9cb4e667b3fafabfdc0ef6c0d41cf1a6998384157b",
+    "src/storage/fts/dict/ob_ft_range_dict.h": "cea4913a9ab67c1d9bbdacef7e8e7ef8a7109673de03bc9774f68b7b5f9fcacc",
+    "src/storage/fts/ik/ob_ik_arbitrator.cpp": "7e7e1d01ab454e8b2206533803008974507edb1fbba2ebb13bf7fb71d881c7ad",
+    "src/storage/fts/ik/ob_ik_arbitrator.h": "fc751a1938ce35b3081c912a94fa6b342e2ddf1ad81f0ec080e20f23cdb2dee5",
+    "src/storage/fts/ob_fts_stop_word.cpp": "d50b1f1ee56c9650233e7fac7f58c2ead0cf55755c5064221bed965c0a80a9fc",
+    "src/storage/fts/ob_ik_ft_parser.cpp": "00964d330fdafc12954c0de04cd340a12ae00495288ac801edd980c0170904fb",
+    "src/storage/fts/ob_ik_ft_parser.h": "9d5a5935041cf7dacd33536e9a1ca97f2307de2865e19fab80f66af2a8a24e36",
+    "src/storage/retrieval/ob_sparse_daat_iter.cpp": "a051b68814de035dd4041781539d6d799ae5535dfb98abc1ad0d99d381fffe7c",
+    "src/storage/retrieval/ob_sparse_daat_iter.h": "ff620569554b492860eba1636652b5441e2b8d5d93debd64b1aab525b7f27d85",
+    "src/storage/retrieval/ob_sparse_retrieval_util.h": "3f14dcf5d74ef55561857b59649551fc9976cc67a678deeb0df255c779a80129",
+    "unittest/sql/fts/test_fts_allocation_and_normalization.cpp": "3ee91eada0c9567886d80df599f64a4bcdf8b8fd5ea6a723db12b71fe6f954bf"
+  },
+  "verification": {
+    "status": "passed",
+    "sql_unit_tests": 58,
+    "sql_snapshot_cases": 334,
+    "correctness_sha256": "45cae833284be28c7f423245487c8e99fc3f763cbaa76013473002348a8a6049",
+    "official_fts_regression": "passed (MariaDB client output-format compatibility only)",
+    "original_binary_sha256": "8a96b8741a51e5967c83be91326aa7d85fb4abbf93643c6c965ad713805167cb",
+    "candidate_binary_sha256": "efea0268c1ca060013175584bf3a854b35455a644ab8f4eb1616c689a4bdcc7c",
+    "source_files_match_windows_checkout": 11,
+    "lifecycle_regression_before_fix": "duplicate free reproduced, exit 139"
+  }
+}

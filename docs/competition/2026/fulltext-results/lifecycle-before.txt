@@ -1,0 +1,11 @@
+Running main() from gtest_main.cc
+Note: Google Test filter = FtsParserLifecycle.*
+[==========] Running 1 test from 1 test case.
+[----------] Global test environment set-up.
+[----------] 1 test from FtsParserLifecycle
+[ RUN      ] FtsParserLifecycle.RepeatedCleanupAfterPartialInitialization
+unittest/sql/fts/test_fts_allocation_and_normalization.cpp:45: Failure
+      Expected: 1U
+      Which is: 1
+To be equal to: live.erase(ptr)
+      Which is: 0

@@ -419,6 +419,8 @@ int ObFTRangeDict::build_dict_from_cache(const ObFTCacheRangeContainer &range_co
       range.end_ = dat->end_word_;
       range.dict_ = dict;
       if (OB_FAIL(range_dicts_.push_back(range))) {
+        dict->~ObFTCacheDict();
+        range_alloc_.free(dict);
       }
     }
   }

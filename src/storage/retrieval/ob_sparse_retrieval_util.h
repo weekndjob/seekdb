@@ -28,13 +28,14 @@ namespace storage
 class ObDomainIdCmp
 {
 public:
-  ObDomainIdCmp() : cmp_func_(nullptr) {}
+  ObDomainIdCmp() : cmp_func_(nullptr), binary_varchar_id_(false) {}
   ~ObDomainIdCmp() {}
   inline int init(const ObObjMeta &obj_meta);
   inline int compare(const ObDatum &lhs, const ObDatum &rhs, int &cmp_ret) const;
-  inline void reset() { cmp_func_ = nullptr; }
+  inline void reset() { cmp_func_ = nullptr; binary_varchar_id_ = false; }
 private:
   common::ObDatumCmpFuncType cmp_func_;
+  bool binary_varchar_id_;
   DISALLOW_COPY_AND_ASSIGN(ObDomainIdCmp);
 };
 
@@ -52,6 +53,8 @@ int ObDomainIdCmp::init(const ObObjMeta &obj_meta)
       STORAGE_LOG(WARN,"failed to get basic functions", K(ret), K(obj_meta));
     } else {
       cmp_func_ = id_basic_funcs->null_first_cmp_;
+      binary_varchar_id_ = obj_meta.get_type() == ObVarcharType
+          && obj_meta.get_collation_type() == CS_TYPE_BINARY;
     }
   }
   return ret;
@@ -77,6 +80,24 @@ int ObDomainIdCmp::compare(const ObDatum &lhs, const ObDatum &rhs, int &cmp_ret)
       cmp_ret = -(lmin - rmin);
     } else {
       ret = OB_ERR_UNEXPECTED;
+    }
+  } else if (binary_varchar_id_) {
+    // Domain IDs use raw binary ordering. Keep the MIN/MAX handling above:
+    // block-max scans use those sentinels for unbounded ranges.
+    if (lhs.is_null() || rhs.is_null()) {
+      cmp_ret = lhs.is_null() ? (rhs.is_null() ? 0 : -1) : 1;
+    } else {
+      const int64_t common_length = MIN(lhs.len_, rhs.len_);
+      if (lhs.len_ == 8 && rhs.len_ == 8) {
+        cmp_ret = MEMCMP(lhs.ptr_, rhs.ptr_, 8);
+      } else if (lhs.len_ == 16 && rhs.len_ == 16) {
+        cmp_ret = MEMCMP(lhs.ptr_, rhs.ptr_, 16);
+      } else {
+        cmp_ret = common_length > 0 ? MEMCMP(lhs.ptr_, rhs.ptr_, common_length) : 0;
+      }
+      if (cmp_ret == 0) {
+        cmp_ret = lhs.len_ < rhs.len_ ? -1 : (lhs.len_ > rhs.len_ ? 1 : 0);
+      }
     }
   } else {
     ret = cmp_func_(lhs, rhs, cmp_ret, nullptr);

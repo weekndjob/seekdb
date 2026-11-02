@@ -26,7 +26,8 @@ namespace storage
 ObSRMergeCmp::ObSRMergeCmp()
   : cmp_func_(nullptr),
     iter_ids_(nullptr),
-    is_inited_(false)
+    is_inited_(false),
+    binary_varchar_id_(false)
 {
 }
 
@@ -40,10 +41,10 @@ int ObSRMergeCmp::init(
   } else {
     iter_ids_ = iter_ids;
     common::ObDatumBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(id_meta.type_, id_meta.cs_type_);
-    cmp_func_ = basic_funcs->null_first_cmp_;
-    if (OB_ISNULL(cmp_func_)) {
+    if (OB_ISNULL(basic_funcs) || OB_ISNULL(cmp_func_ = basic_funcs->null_first_cmp_)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
+      binary_varchar_id_ = id_meta.type_ == ObVarcharType && id_meta.cs_type_ == CS_TYPE_BINARY;
       is_inited_ = true;
     }
   }
@@ -58,6 +59,27 @@ int ObSRMergeCmp::cmp(
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (binary_varchar_id_) {
+    const ObDatum &left = get_id_datum(l.iter_idx_);
+    const ObDatum &right = get_id_datum(r.iter_idx_);
+    if (left.is_null() || right.is_null()) {
+      cmp_ret = left.is_null() ? (right.is_null() ? 0 : -1) : 1;
+    } else {
+      // CS_TYPE_BINARY compares raw bytes then length, without end-space
+      // padding. Avoid the generic collation validation/dispatch per heap
+      // comparison; all other ID types continue through the original function.
+      const int64_t common_length = MIN(left.len_, right.len_);
+      if (left.len_ == 8 && right.len_ == 8) {
+        cmp_ret = MEMCMP(left.ptr_, right.ptr_, 8);
+      } else if (left.len_ == 16 && right.len_ == 16) {
+        cmp_ret = MEMCMP(left.ptr_, right.ptr_, 16);
+      } else {
+        cmp_ret = common_length > 0 ? MEMCMP(left.ptr_, right.ptr_, common_length) : 0;
+      }
+      if (cmp_ret == 0) {
+        cmp_ret = left.len_ < right.len_ ? -1 : (left.len_ > right.len_ ? 1 : 0);
+      }
+    }
   } else {
     int tmp_ret = 0;
     if (OB_FAIL(cmp_func_(
@@ -352,11 +374,25 @@ int ObSRDaaTIterImpl::filter_on_demand(const int64_t count, const double relevan
   ObExpr *filter_expr = iter_param_->filter_expr_;
   ObExpr *relevance_proj_expr = iter_param_->relevance_proj_expr_;
   ObEvalCtx *eval_ctx = iter_param_->eval_ctx_;
-  ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx);
-
   if (!iter_param_->need_filter()) {
     need_project = true;
-  } else if (eval_ctx->is_vectorized()) {
+    return OB_SUCCESS;
+  }
+  if (eval_ctx->is_vectorized() && filter_expr->type_ == T_OP_BOOL
+      && filter_expr->arg_cnt_ == 1 && filter_expr->args_[0] == relevance_proj_expr
+      && relevance_proj_expr->datum_meta_.type_ == ObDoubleType) {
+    if (OB_UNLIKELY(count >= eval_ctx->max_batch_size_)) {
+      return OB_ERR_UNEXPECTED;
+    }
+    // This exact filter is BOOL(score). The score is already a non-null
+    // double; match ObExprBool's double semantics (including negative scores,
+    // signed zero and NaN). Scores are still calculated and projected normally.
+    need_project = relevance != 0.0;
+    return OB_SUCCESS;
+  }
+  ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx);
+
+  if (eval_ctx->is_vectorized()) {
     if (OB_UNLIKELY(count >= eval_ctx->max_batch_size_)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
@@ -422,8 +458,8 @@ int ObSRDaaTIterImpl::project_results(const int64_t count)
       ObDatum &id_proj_datum = id_proj_expr->locate_datum_for_write(*eval_ctx);
       set_datum_func_(id_proj_datum, buffered_domain_ids_[i]);
       id_evaluated_flags.set(i);
-      id_proj_expr->set_evaluated_projected(*eval_ctx);
     }
+    id_proj_expr->set_evaluated_projected(*eval_ctx);
     if (iter_param_->need_project_relevance()) {
       sql::ObBitVector &relevance_evaluated_flags = relevance_proj_expr->get_evaluated_flags(*eval_ctx);
       for (int64_t i = 0; i < count; ++i) {
@@ -431,8 +467,8 @@ int ObSRDaaTIterImpl::project_results(const int64_t count)
         ObDatum &relevance_proj_datum = relevance_proj_expr->locate_datum_for_write(*eval_ctx);
         relevance_proj_datum.set_double(buffered_relevances_[i]);
         relevance_evaluated_flags.set(i);
-        relevance_proj_expr->set_evaluated_projected(*eval_ctx);
       }
+      relevance_proj_expr->set_evaluated_projected(*eval_ctx);
     }
   } else if (OB_UNLIKELY(1 != count)) {
     ret = OB_ERR_UNEXPECTED;
