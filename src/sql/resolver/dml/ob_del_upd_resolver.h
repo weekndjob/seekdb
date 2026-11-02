@@ -42,6 +42,7 @@ struct ObTableAssignment
                N_ASSIGN, assignments_);
 };
 
+class ObDefaultValueUtils;
 class ObDelUpdResolver: public ObDMLResolver
 {
 public:
@@ -70,6 +71,13 @@ protected:
   int resolve_assign_columns(const ParseNode &assign_target,
                              ObIArray<ObColumnRefRawExpr *> &column_list);
 
+  int resolve_ai_column_assignments(common::ObIArray<ObTableAssignment> &assigns,
+      int64_t table_index, const TableItem &table, const share::schema::ObTableSchema &schema);
+  int build_ai_column_request_expr(ObRawExpr *&expr);
+  int build_ai_column_insert_default(const share::schema::ObTableSchema &table,
+      const share::schema::ObColumnSchemaV2 &column, ObDefaultValueUtils &utils,
+      const ColumnItem *item, ObRawExpr *&expr);
+  int reject_ai_column_assignment(const ColumnItem &column, const TableItem &table);
   int resolve_additional_assignments(common::ObIArray<ObTableAssignment> &table_assigns,
                                      const ObStmtScope scope);
   int generate_wrapper_expr_for_assignemnts(common::ObIArray<ObAssignment> &assigns,

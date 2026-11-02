@@ -32,8 +32,8 @@
 #
 # 9. For compatibility, when add new column for system table, new column's definition should be "not null + default value" or "nullable".
 #    Specially, when column types are as follows:
-#    1. double、number：default value is not supported, so new column definition should be "nullable".
-#    2. longtext、timestamp：mysql can't cast default value to specified column type, so new column definition should be "nullable".
+#    1. double銆乶umber锛歞efault value is not supported, so new column definition should be "nullable".
+#    2. longtext銆乼imestamp锛歮ysql can't cast default value to specified column type, so new column definition should be "nullable".
 #
 # Add internal table encoding guidelines see:
 ################################################################################
@@ -2465,7 +2465,65 @@ all_objauth_mysql_def = dict(
   ]
   )
 def_table_schema(**all_objauth_mysql_def)
+
 def_table_schema(**gen_history_table_def(1134, all_objauth_mysql_def))
+
+# Asynchronous AI-column definitions and durable work. Definitions are
+# committed with DDL; task rows are written by business DML in its own transaction.
+all_ai_column_def = dict(
+    owner = 'database-competition',
+    table_name = '__all_ai_column',
+    table_id = '1140',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [('table_id', 'int'), ('column_id', 'int')],
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('column_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false'),
+        ('schema_version', 'int', 'false'),
+        ('definition_version', 'int', 'false'),
+        ('normalized_expr', 'longtext', 'false'),
+        ('definition', 'longblob', 'false'),
+        ('max_retries', 'int', 'false'),
+        ('sync_mode', 'varchar:16', 'false', 'async'),
+        ('state_column_id', 'int', 'false'),
+        ('request_column_id', 'int', 'false'),
+        ('result_spec_column_id', 'int', 'false')
+    ]
+)
+def_table_schema(**all_ai_column_def)
+def_table_schema(**gen_history_table_def(1141, all_ai_column_def))
+
+def_table_schema(
+    owner = 'database-competition',
+    table_name = '__all_ai_column_task',
+    table_id = '1142',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [('table_id', 'int'), ('column_id', 'int'), ('rowkey_hash', 'varchar:64')],
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('rowkey_predicate', 'varchar:4000', 'false'),
+        ('request_id', 'varchar:64', 'false'),
+        ('definition_version', 'int', 'false'),
+        ('input_value', 'longtext', 'true'),
+        ('options_value', 'longtext', 'true'),
+        ('sql_mode', 'int', 'false', '0'),
+        ('time_zone', 'varchar:128', 'false', '+00:00'),
+        ('state', 'int', 'false', '0'),
+        ('retry_count', 'int', 'false', '0'),
+        ('eligible_ts', 'timestamp:6', 'false'),
+        ('lease_owner', 'varchar:64', 'true'),
+        ('lease_until', 'timestamp:6', 'true'),
+        ('result_value', 'longtext', 'true'),
+        ('error_code', 'int', 'false', '0')
+    ]
+)
+
+
+
 
 
 # Reserved position (placeholder before this line)

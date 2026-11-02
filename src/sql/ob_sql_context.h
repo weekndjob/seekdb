@@ -550,6 +550,10 @@ public:
 struct ObQueryCtx
 {
 public:
+  // User references captured before optimization, as (table ID, column ID) pairs.
+  common::ObSEArray<uint64_t, 8> ai_column_read_refs_;
+  uint64_t ai_column_retry_table_id_ = 0;
+  uint64_t ai_column_retry_column_id_ = 0;
   ObQueryCtx()
     : question_marks_count_(0),
       calculable_items_(),

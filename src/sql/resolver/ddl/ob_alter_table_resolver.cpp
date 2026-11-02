@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "config_bridge.h"
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
+#include "sql/resolver/ddl/ai_column_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "sql/resolver/ddl/ob_index_builder_util.h"
@@ -233,6 +234,31 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
       } else if (OB_ISNULL(tbl_schema)) {
         ret = OB_ERR_UNEXPECTED;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && table_schema_) {
+    const auto &actions = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
+    for (auto it = table_schema_->column_begin(); OB_SUCC(ret) && it != table_schema_->column_end(); ++it) {
+      if (!(*it)->is_ai_column()) { continue; }
+      AiColumnDefinition definition;
+      if (OB_FAIL(definition.decode((*it)->get_ai_column_info()))) { break; }
+      for (auto action_it = actions.column_begin(); OB_SUCC(ret) && action_it != actions.column_end(); ++action_it) {
+        const auto &action = *static_cast<const AlterColumnSchema *>(*action_it);
+        const ObString name = action.get_origin_column_name().empty() ? action.get_column_name_str() : action.get_origin_column_name();
+        const auto *original = table_schema_->get_column_schema(name);
+        if (!original || action.alter_type_ == OB_DDL_ADD_COLUMN) { continue; }
+        if (original->get_column_id() == (*it)->get_column_id() && action.alter_type_ != OB_DDL_DROP_COLUMN) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "modifying AI COLUMN definitions or result columns");
+        } else if (original->get_column_id() != (*it)->get_column_id()) {
+          bool dependency = original->get_rowkey_position() > 0;
+          for (int64_t j = 0; j < definition.dependencies_.count(); ++j) { dependency |= original->get_column_id() == definition.dependencies_.at(j); }
+          if (dependency) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "altering a column referenced by AI COLUMN");
+          }
+        }
       }
     }
   }
@@ -3551,6 +3577,17 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
     if (NULL != pos_node) {
       if (OB_FAIL(resolve_pos_column(pos_node, column))) {
       }
+    }
+  }
+  if (OB_SUCC(ret) && column.is_ai_column()) {
+    if (table_schema_->get_column_schema(column.get_column_name_str())) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "MODIFY AI COLUMN definitions");
+      ret = OB_NOT_SUPPORTED;
+    } else {
+      // The root DDL service assigns the final result/auxiliary IDs later.
+      column.set_column_id(tmp_table_schema.get_max_used_column_id() + 1);
+      if (OB_FAIL(tmp_table_schema.add_column(column))) {
+      } else { ret = AiColumnResolver::normalize(column, tmp_table_schema, params_); }
     }
   }
   return ret;

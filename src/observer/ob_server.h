@@ -21,6 +21,7 @@
 #include <sys/statvfs.h>
 #endif
 #include "lib/net/ob_net_util.h"
+#include "observer/ai_column_worker.h"
 #include "lib/task/ob_timer.h"
 #include "lib/random/ob_mysql_random.h"
 #include "lib/container/ob_iarray.h"
@@ -426,6 +427,7 @@ private:
 
 
   common::ObMySQLProxy sql_proxy_;
+  AiColumnWorker ai_column_worker_;
   common::ObMySQLProxy ddl_sql_proxy_;
 
   // The OceanBase configuration relating to.

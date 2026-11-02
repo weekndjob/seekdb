@@ -1,3 +1,4 @@
+#include "share/schema/ai_column_definition.h"
 /*
  * Copyright (c) 2025 OceanBase.
  *
@@ -58,6 +59,12 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
+  const bool ai_retry = parse_tree.num_child_ == 12 && parse_tree.children_[11]
+      && parse_tree.children_[11]->type_ == T_AI_COLUMN_RETRY;
+  if (OB_SUCC(ret) && ai_retry && parse_tree.children_[11]->value_ != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "combining AI COLUMN RETRY with another ALTER action");
+  }
   // resolve outline data hints first
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_outline_data_hints())) {
@@ -77,6 +84,49 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
+  if (OB_SUCC(ret) && ai_retry) {
+    const TableItem *table = update_stmt->get_table_item(0);
+    const ObTableSchema *schema = nullptr;
+    ParseNode *target = parse_tree.children_[UPDATE_LIST]->children_[0]->children_[0]->children_[2];
+    if (!table || !target) { ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(schema_checker_->get_table_schema(table->ref_id_, schema))) {
+    } else if (!schema) { ret = OB_ERR_UNEXPECTED;
+    } else {
+      const auto *column = schema->get_column_schema(ObString(target->str_len_, target->str_value_));
+      if (!column || !column->is_ai_column()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "retrying a column that is not an AI column");
+      } else {
+        update_stmt->get_query_ctx()->ai_column_retry_table_id_ = schema->get_table_id();
+        update_stmt->get_query_ctx()->ai_column_retry_column_id_ = column->get_column_id();
+        AiColumnDefinition definition;
+        if (OB_FAIL(definition.decode(column->get_ai_column_info()))) {
+        } else {
+          const auto *state = schema->get_column_schema(definition.state_column_id_);
+          if (!state) { ret = OB_ERR_UNEXPECTED;
+          } else {
+            ObSEArray<ParseNode *, 16> nodes;
+            if (parse_tree.children_[WHERE]) { ret = nodes.push_back(parse_tree.children_[WHERE]); }
+            for (int64_t i = 0; OB_SUCC(ret) && i < nodes.count(); ++i) {
+              ParseNode *node = nodes.at(i);
+              if (node->type_ == T_SELECT) { continue; }
+              if (node->type_ == T_COLUMN_REF && node->num_child_ == 3
+                  && !node->children_[0] && !node->children_[1] && node->children_[2]
+                  && !node->children_[2]->is_input_quoted_ && ObString(node->children_[2]->str_len_, node->children_[2]->str_value_).case_compare("status") == 0) {
+                ObString name;
+                if (OB_FAIL(ob_write_string(*allocator_, state->get_column_name_str(), name))) { break; }
+                node->children_[2]->str_value_ = name.ptr();
+                node->children_[2]->str_len_ = name.length();
+              }
+              for (int64_t j = 0; OB_SUCC(ret) && j < node->num_child_; ++j) {
+                if (node->children_[j]) { ret = nodes.push_back(node->children_[j]); }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     current_scope_ = T_UPDATE_SCOPE;
     // resolve assignments

@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
+#include "sql/resolver/ddl/ai_column_resolver.h"
+#include "share/schema/ai_column_schema_builder.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/ddl/ob_fts_index_builder_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -397,6 +399,23 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
+  }
+  if (OB_SUCC(ret)) {
+    ObTableSchema &schema = static_cast<ObCreateTableStmt *>(stmt_)->get_create_table_arg().schema_;
+    ObSEArray<uint64_t, 4> ai_ids;
+    for (auto it = schema.column_begin(); OB_SUCC(ret) && it != schema.column_end(); ++it) {
+      if ((*it)->is_ai_column()) { ret = ai_ids.push_back((*it)->get_column_id()); }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ai_ids.count(); ++i) {
+      auto *column = schema.get_column_schema(ai_ids.at(i));
+      ret = AiColumnResolver::normalize(*column, schema, params_);
+      if (OB_FAIL(ret)) { LOG_WARN("AI COLUMN normalization failed", K(ret)); }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ai_ids.count(); ++i) {
+      auto *column = schema.get_column_schema(ai_ids.at(i));
+      ret = AiColumnSchemaBuilder::complete(schema, *column, *allocator_);
+      if (OB_FAIL(ret)) { LOG_WARN("AI COLUMN physical-column allocation failed", K(ret)); }
+    }
   }
   return ret;
 }

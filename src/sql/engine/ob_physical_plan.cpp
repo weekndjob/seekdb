@@ -43,6 +43,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     autoinc_params_(allocator_),
     stmt_need_privs_(allocator_),
     vars_(allocator_),
+    ai_column_read_refs_(allocator_),
     sql_expression_factory_(allocator_),
     expr_op_factory_(allocator_),
     literal_stmt_type_(stmt::T_NONE),
@@ -123,6 +124,7 @@ ObPhysicalPlan::~ObPhysicalPlan()
 void ObPhysicalPlan::reset()
 {
   ObPlanCacheObject::reset();
+  ai_column_read_refs_.reset();
   phy_hint_.reset();
   root_op_spec_ = NULL;
   param_count_ = 0;
@@ -649,7 +651,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     need_switch_to_table_lock_worker_,
                     data_complement_gen_doc_id_,
                     px_parallel_rule_,
-                    px_worker_share_plan_enabled_);
+                    px_worker_share_plan_enabled_,
+                    ai_column_read_refs_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -917,7 +920,7 @@ void ObPhysicalPlan::calc_whether_need_trans()
   if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && stmt::T_EXPLAIN != stmt_type_) {
     bool_ret = true;
   }
-  is_need_trans_ = bool_ret;
+  is_need_trans_ = bool_ret || (stmt::T_EXPLAIN != stmt_type_ && !ai_column_read_refs_.empty());
 }
 
 int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)

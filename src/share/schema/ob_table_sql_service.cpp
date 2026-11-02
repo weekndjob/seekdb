@@ -16,6 +16,10 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_sql_service.h"
+#include "share/schema/ai_column_metadata.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_multi_version_schema_service.h"
+#include "common/mysqlclient/ob_mysql_transaction.h"
 #include "lib/literals/ob_literals.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/schema/ob_constraint.h"
@@ -810,6 +814,11 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
       }
     }
   }
+  for (auto it = table_schema.column_begin(); ret == OB_SUCCESS && it != table_schema.column_end(); ++it) {
+    if (*it && (*it)->is_ai_column()) {
+      ret = AiColumnMetadata::remove(sql_client, table_schema.get_table_id(), (*it)->get_column_id(), new_schema_version);
+    }
+  }
   return ret;
 }
 
@@ -909,6 +918,7 @@ int ObTableSqlService::insert_single_column(
     if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
     }
   }
+  if (OB_SUCC(ret) && !new_table_schema.is_index_table() && !new_table_schema.is_aux_lob_table()) { ret = AiColumnMetadata::store(sql_client, new_column_schema, new_column_schema.get_schema_version()); }
   return ret;
 }
 
@@ -990,6 +1000,12 @@ int ObTableSqlService::update_single_column(
     }
   }
 
+  if (OB_SUCC(ret) && !new_table_schema.is_index_table() && !new_table_schema.is_aux_lob_table()) {
+    const auto *original = origin_table_schema.get_column_schema(new_column_schema.get_column_id());
+    if (original && original->is_ai_column() && !new_column_schema.is_ai_column()) {
+      ret = AiColumnMetadata::remove(sql_client, new_table_schema.get_table_id(), new_column_schema.get_column_id(), new_column_schema.get_schema_version());
+    } else { ret = AiColumnMetadata::store(sql_client, new_column_schema, new_column_schema.get_schema_version()); }
+  }
   return ret;
 }
 
@@ -1144,6 +1160,9 @@ int ObTableSqlService::batch_add_columns_for_create_table(common::ObISQLClient &
     } else if (FALSE_IT(time_guard.click("insert_all_column_history"))) {
     }
   }
+  for (int64_t i = 0; ret == OB_SUCCESS && i < tables.count(); ++i) {
+    ret = AiColumnMetadata::store_table(sql_client, tables.at(i));
+  }
   return ret;
 }
 
@@ -1165,6 +1184,7 @@ int ObTableSqlService::add_columns_for_not_core(ObISQLClient &sql_client,
   } else if (OB_FAIL(dml.set_default_columns("is_deleted", "0"))) {
   } else if (OB_FAIL(exec_dml(sql_client, OB_ALL_COLUMN_HISTORY_TNAME, dml, column_count))) {
   }
+  if (OB_SUCC(ret)) { ret = AiColumnMetadata::store_table(sql_client, table); }
   return ret;
 }
 
@@ -2044,6 +2064,9 @@ int ObTableSqlService::delete_single_column(
     }
   }
 
+  if (OB_SUCC(ret) && orig_column_schema.is_ai_column()) {
+    ret = AiColumnMetadata::remove(sql_client, table_id, column_id, new_schema_version);
+  }
   return ret;
 }
 

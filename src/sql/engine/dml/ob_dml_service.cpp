@@ -1,3 +1,4 @@
+#include "sql/engine/dml/ai_column_dml.h"
 /*
  * Copyright (c) 2025 OceanBase.
  *
@@ -620,6 +621,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
     } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
         dml_op, ins_ctdef.das_base_ctdef_, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
     }
+    if (OB_SUCC(ret)) { ret = AiColumnDml::before(ins_ctdef, dml_op, true); }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_row_null(ins_ctdef.new_row_,
                                       dml_op.get_eval_ctx(),
@@ -792,6 +794,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
       } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
           dml_op, upd_ctdef.das_base_ctdef_, upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_))) {
       }
+      if (OB_SUCC(ret)) { ret = AiColumnDml::before(upd_ctdef, dml_op, false); }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(check_row_null(upd_ctdef.new_row_,
                                         dml_op.get_eval_ctx(),
@@ -2165,6 +2168,7 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
             }
           }
         }
+        if (OB_SUCC(ret)) { ret = AiColumnDml::after(dml_ctdef, op, static_cast<int>(dml_event)); }
         // process after row trigger
         if (OB_SUCC(ret) && dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row()) {
           ObEvalCtx &eval_ctx = op.get_eval_ctx();
@@ -2217,6 +2221,7 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_
       } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
       }
     }
+    if (OB_SUCC(ret)) { ret = AiColumnDml::after(dml_ctdef, op, static_cast<int>(dml_event)); }
     if (OB_SUCC(ret) && OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
     }
   }

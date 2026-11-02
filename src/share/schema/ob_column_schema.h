@@ -235,6 +235,10 @@ int assign(const ObColumnSchemaV2 &src_schema);
   // false: generated columns or ROWID column
   inline bool is_column_stored_in_sstable() const
   { return !(is_virtual_generated_column() && !is_heap_alter_rowkey_column()); }
+  inline bool is_ai_column() const { return (column_flags_ & AI_COLUMN_FLAG) != 0 && !is_unused(); }
+  inline bool is_ai_column_aux() const { return (column_flags_ & AI_COLUMN_AUX_FLAG) != 0 && !is_unused(); }
+  int set_ai_column_info(const common::ObString &info) { return deep_copy_str(info, ai_column_info_); }
+  const common::ObString &get_ai_column_info() const { return ai_column_info_; }
   inline bool is_virtual_generated_column() const { return column_flags_ & VIRTUAL_GENERATED_COLUMN_FLAG; }
   inline bool is_stored_generated_column() const { return column_flags_ & STORED_GENERATED_COLUMN_FLAG; }
   inline bool is_cte_generated_column() const { return column_flags_ & CTE_GENERATED_COLUMN_FLAG; }
@@ -398,6 +402,7 @@ private:
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
   share::ObLocalSessionVar local_session_vars_;
+  common::ObString ai_column_info_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

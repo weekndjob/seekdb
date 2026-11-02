@@ -15,6 +15,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
+#include "share/schema/ai_column_metadata.h"
 #include "config_bridge.h"
 #include "ob_schema_service_sql_impl.h"
 #include "share/ob_global_stat_proxy.h"
@@ -1302,7 +1303,7 @@ int ObSchemaServiceSQLImpl::get_sys_variable_schema(
       ObSysVarClassType sys_var_id = ObSysVariables::get_sys_var_id(i);
       const ObSysVarSchema *sys_var = NULL;
       if (OB_FAIL(sys_variable_schema.get_sysvar_schema(sys_var_id, sys_var))) {
-        if (ret == OB_ERR_SYS_VARIABLE_UNKNOWN && sys_var_id == SYS_VAR_ENABLE_FILE_SQL) {
+        if (ret == OB_ERR_SYS_VARIABLE_UNKNOWN && (sys_var_id == SYS_VAR_ENABLE_FILE_SQL || sys_var_id == SYS_VAR_AI_COLUMN_STRICT_READ)) {
           // Session-only opt-in introduced after older instances were created.
           // Fill its disabled default without replacing persisted settings.
           ret = OB_SUCCESS;
@@ -1386,6 +1387,11 @@ int ObSchemaServiceSQLImpl::fetch_all_column_info(
       } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_column_schema(check_deleted, *result, table_schema_array))) {
       }
     }
+  }
+  for (int64_t i = 0; ret == OB_SUCCESS && i < table_schema_array.count(); ++i) {
+    if (!table_schema_array.at(i)) { ret = OB_ERR_UNEXPECTED; }
+    else if (!GCTX.sql_proxy_) { ret = OB_NOT_INIT; }
+    else { ret = AiColumnMetadata::load(*GCTX.sql_proxy_, *table_schema_array.at(i), table_schema_array.at(i)->get_schema_version()); }
   }
   return ret;
 }
@@ -4184,6 +4190,10 @@ int ObSchemaServiceSQLImpl::fetch_column_info(const ObRefreshSchemaStatus &schem
       } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_column_schema(check_deleted, *result, table_schema))) {
       }
     }
+  }
+  if (OB_SUCC(ret) && table_schema) {
+    if (!GCTX.sql_proxy_) { ret = OB_NOT_INIT; }
+    else { ret = AiColumnMetadata::load(*GCTX.sql_proxy_, *table_schema, table_schema->get_schema_version()); }
   }
   return ret;
 }

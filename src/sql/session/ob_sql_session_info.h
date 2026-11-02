@@ -401,6 +401,16 @@ public:
 
 
 public:
+  // Trusted kernel context, never exposed as a SQL variable or hint. Every
+  // caller must scope changes and restore them before returning a pooled session.
+  const transaction::ObTxReadSnapshot *get_ai_column_read_snapshot() const { return ai_column_read_snapshot_; }
+  void set_ai_column_read_snapshot(const transaction::ObTxReadSnapshot *snapshot) { ai_column_read_snapshot_ = snapshot; }
+  bool is_ai_column_hidden_access() const { return ai_column_hidden_access_; }
+  void set_ai_column_hidden_access(bool value) { ai_column_hidden_access_ = value; }
+  bool is_ai_column_internal() const { return ai_column_internal_; }
+  void set_ai_column_internal(bool value) { ai_column_internal_ = value; }
+  const common::ObString &get_ai_column_system_prompt() const { return ai_column_system_prompt_; }
+  void set_ai_column_system_prompt(const common::ObString &value) { ai_column_system_prompt_ = value; }
   ObSQLSessionInfo();
   virtual ~ObSQLSessionInfo();
 
@@ -1030,6 +1040,10 @@ private:
   void *tx_ctx_cache_;
   common::ObString audit_filter_name_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
+  const transaction::ObTxReadSnapshot *ai_column_read_snapshot_ = nullptr;
+  bool ai_column_internal_ = false;
+  bool ai_column_hidden_access_ = false;
+  common::ObString ai_column_system_prompt_;
 };
 
 

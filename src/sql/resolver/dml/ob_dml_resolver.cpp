@@ -1,3 +1,4 @@
+#include "share/schema/ai_column_definition.h"
 /*
  * Copyright (c) 2025 OceanBase.
  *
@@ -1796,6 +1797,50 @@ int ObDMLResolver::resolve_column_ref_for_subquery(const ObQualifiedName &q_name
 
 //resolve column ref expr that column in single basic or alias table
 // TODO bin.lb:  remove resolve_generated_table_column_item
+void ObDMLResolver::mark_ai_column_dml(const ObTableSchema &table)
+{
+  if (!get_stmt() || get_stmt()->is_select_stmt() || table.is_index_table() || table.is_aux_lob_table()) { return; }
+  for (auto it = table.column_begin(); it != table.column_end(); ++it) {
+    if ((*it)->is_ai_column()) {
+      get_stmt()->get_query_ctx()->set_has_nested_sql(true);
+      get_stmt()->get_query_ctx()->disable_udf_parallel_ = true;
+      break;
+    }
+  }
+}
+
+int ObDMLResolver::record_ai_column_read(const ColumnItem &column)
+{
+  int ret = OB_SUCCESS;
+  if (session_info_->is_ai_column_internal()) { return ret; }
+  if (get_stmt()->get_query_ctx()->ai_column_retry_column_id_ != 0 && current_scope_ == T_UPDATE_SCOPE) {
+    return ret; // The RETRY assignment target is an internal lowering detail.
+  }
+  auto *statement = get_stmt();
+  const auto *table = statement->get_table_item_by_id(column.table_id_);
+  if (!table || !table->is_basic_table()) { return ret; }
+  const ObTableSchema *schema = nullptr;
+  const uint64_t id = column.base_cid_ == OB_INVALID_ID ? column.column_id_ : column.base_cid_;
+  if (OB_FAIL(schema_checker_->get_table_schema(table->ref_id_, schema))) {
+  } else if (!schema) { ret = OB_ERR_UNEXPECTED;
+  } else {
+    const auto *source = schema->get_column_schema(id);
+    if (source && source->is_ai_column()) {
+      auto &refs = statement->get_query_ctx()->ai_column_read_refs_;
+      bool found = false;
+      for (int64_t i = 0; i+1 < refs.count(); i+=2) {
+        found |= refs.at(i) == schema->get_table_id() && refs.at(i+1) == id;
+      }
+      if (!found) {
+        if (refs.count() >= 8192) { ret = OB_SIZE_OVERFLOW;
+        } else if (OB_FAIL(refs.push_back(schema->get_table_id()))) {
+        } else { ret = refs.push_back(id); }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_basic_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr)
 {
   int ret = OB_SUCCESS;
@@ -1837,6 +1882,18 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
                                              ObDMLStmt *stmt /* = NULL */)
 {
   int ret = OB_SUCCESS;
+  include_hidden |= session_info_ && (session_info_->is_ai_column_internal() || session_info_->is_ai_column_hidden_access());
+  if (!include_hidden && get_stmt() && get_stmt()->get_query_ctx()
+      && get_stmt()->get_query_ctx()->ai_column_retry_table_id_ == table_item.ref_id_) {
+    const ObTableSchema *table = nullptr;
+    const uint64_t target = get_stmt()->get_query_ctx()->ai_column_retry_column_id_;
+    if (OB_FAIL(schema_checker_->get_table_schema(table_item.ref_id_, table))) { return ret; }
+    const auto *result = table ? table->get_column_schema(target) : nullptr;
+    share::schema::AiColumnDefinition definition;
+    if (result && OB_FAIL(definition.decode(result->get_ai_column_info()))) { return ret; }
+    const auto *state = result ? table->get_column_schema(definition.state_column_id_) : nullptr;
+    include_hidden = state && column_name.case_compare(state->get_column_name_str()) == 0;
+  }
   ObColumnRefRawExpr *col_expr = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
   ColumnItem column_item;
@@ -1963,6 +2020,9 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
         col_item = stmt->get_column_item(stmt->get_column_size() - 1);
       }
     }
+  }
+  if (OB_SUCC(ret) && col_item && stmt == get_stmt()) {
+    ret = record_ai_column_read(*col_item);
   }
   return ret;
 }
@@ -2404,6 +2464,11 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(schema_checker_->get_table_schema( table_item->ref_id_, table_schema))) {
         ret = OB_TABLE_NOT_EXIST;
+      } else if (!stmt->is_select_stmt() && table_schema->get_table_id() >= 1140
+          && table_schema->get_table_id() <= 1142 && session_info_->is_user_session()
+          && !session_info_->is_ai_column_internal()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "user writes to AI COLUMN internal metadata");
       } else if (!stmt->is_select_stmt() && table_schema->is_in_recyclebin()) {
         ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       } else if (table_schema->is_vir_table() && !stmt->is_select_stmt()) {
@@ -2412,6 +2477,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
+      } else if (OB_FALSE_IT(mark_ai_column_dml(*table_schema))) {
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {
       } else if (OB_FAIL(resolve_generated_column_expr_temp(table_item))) {
       } else if (OB_FAIL(resolve_table_constraint_items(table_item, table_schema))) {

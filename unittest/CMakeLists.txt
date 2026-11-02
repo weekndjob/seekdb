@@ -3,7 +3,8 @@
 file(GLOB_RECURSE SQL_REGRESSION_SOURCES CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/sql/test_*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/sql/*_test.cpp")
-add_executable(sql_tests ${SQL_REGRESSION_SOURCES})
+add_executable(sql_tests ${SQL_REGRESSION_SOURCES}
+  share/schema/test_ai_column_schema.cpp)
 target_link_libraries(sql_tests PRIVATE oceanbase gtest_main gtest pthread)
 set_target_properties(sql_tests PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/sql")

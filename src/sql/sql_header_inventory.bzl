@@ -422,6 +422,10 @@ SQL_COMPOSITION_HEADERS = [
 ]
 
 SQL_PRIVATE_HEADERS = [
+    "engine/ai_column_strict_read.h",
+    "engine/dml/ai_column_dml.h",
+    "resolver/ddl/ai_column_resolver.h",
+    "session/ai_column_session_scope.h",
     "code_generator/ob_code_generator.h",
     "code_generator/ob_dml_cg_service.h",
     "code_generator/ob_static_engine_cg.h",

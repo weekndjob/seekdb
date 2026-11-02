@@ -2127,6 +2127,20 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
     }
   }
 
+  if (OB_SUCC(ret) && index_dml_info.is_primary_index_) {
+    const ObTableSchema *table = nullptr;
+    if (OB_FAIL(cg_.opt_ctx_->get_schema_guard()->get_table_schema(index_dml_info.ref_table_id_, table))) {
+    } else if (!table) { ret = OB_ERR_UNEXPECTED;
+    } else {
+      for (auto it = table->column_begin(); !table->is_index_table() && !table->is_aux_lob_table() && it != table->column_end(); ++it) {
+        dml_base_ctdef.has_ai_columns_ |= (*it)->is_ai_column();
+      }
+      if (dml_base_ctdef.has_ai_columns_) {
+        cg_.phy_plan_->set_has_nested_sql(true);
+        cg_.phy_plan_->set_need_serial_exec(true);
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     // Mark the ctdef as a main-table operation.
     dml_base_ctdef.das_base_ctdef_.is_access_main_table_ = true;

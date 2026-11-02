@@ -60,6 +60,10 @@ typedef common::ObFixedArray<ObPlanPwjConstraint, common::ObIAllocator> PlanPwjC
 class ObPhysicalPlan : public ObPlanCacheObject
 {
 public:
+  const common::ObIArray<uint64_t> &get_ai_column_read_refs() const { return ai_column_read_refs_; }
+  int set_ai_column_read_refs(const common::ObIArray<uint64_t> &refs)
+  { return ai_column_read_refs_.assign(refs); }
+
   static const int32_t SLOW_QUERY_TIME = 100000; //100ms
   static const int64_t SLOW_QUERY_TIME_FOR_PLAN_EXPIRE = 5000; // 5ms
   static const int64_t SLOW_QUERY_ROW_COUNT_THRESOLD = 5000;
@@ -415,6 +419,7 @@ private:
   share::schema::ObStmtNeedPrivs stmt_need_privs_;
   // Involved system variables and user variables
   common::ObFixedArray<ObVarInfo, common::ObIAllocator> vars_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> ai_column_read_refs_;
   ObSqlExpressionFactory sql_expression_factory_;
   ObExprOperatorFactory expr_op_factory_;
   stmt::StmtType literal_stmt_type_; // meaning reference ObBasicStmt corresponding definition

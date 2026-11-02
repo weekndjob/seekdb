@@ -23,6 +23,8 @@
 #include "share/ob_sys_time_zone_util.h"
 
 #include "ob_ddl_service.h"
+#include "share/schema/ai_column_schema_builder.h"
+#include "share/schema/ai_column_metadata.h"
 #include "rootserver/ob_runtime_ddl_service.h"
 #include "query/session/ob_inner_sql_connection_access.h"
 #include "share/ob_ddl_common.h"
@@ -8323,6 +8325,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
         ObColumnSchemaV2 new_column_schema;
         switch (alter_column_schema->alter_type_) {
           case OB_DDL_DROP_COLUMN: {
+            const auto *ai_original = origin_table_schema.get_column_schema(orig_column_name);
+            const bool dropping_ai = ai_original && ai_original->is_ai_column();
+            AiColumnDefinition dropped_ai;
+            if (dropping_ai && OB_FAIL(dropped_ai.decode(ai_original->get_ai_column_info()))) { break; }
             const bool overall_check_need =
               (alter_column_schema == static_cast<AlterColumnSchema *>(*alter_table_schema.column_begin()));
             if (overall_check_need) {
@@ -8340,6 +8346,19 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             }
             if (FAILEDx(drop_column_online(schema_guard, origin_table_schema, orig_column_name,
                   new_tbl_visible_cols_cnt_after_alter, last_drop_column_id, ddl_operator, trans, new_table_schema, update_column_name_set))) {
+            }
+            if (OB_SUCC(ret) && dropping_ai) {
+              const uint64_t auxiliary[] = {dropped_ai.state_column_id_, dropped_ai.request_column_id_, dropped_ai.result_spec_column_id_};
+              for (int64_t j = 0; OB_SUCC(ret) && j < 3; ++j) {
+                const auto *column = new_table_schema.get_column_schema(auxiliary[j]);
+                ObString name;
+                int64_t version = 0;
+                if (!column || !column->is_ai_column_aux()) { ret = OB_ERR_UNEXPECTED;
+                } else if (OB_FAIL(ob_write_string(allocator, column->get_column_name_str(), name))) {
+                } else if (OB_FAIL(ddl_operator.update_prev_id_for_delete_column(origin_table_schema, new_table_schema, *column, trans))) {
+                } else if (OB_FAIL(schema_service_->gen_new_schema_version(version))) {
+                } else { ret = ddl_operator.delete_single_column(trans, version, new_table_schema, name); }
+              }
             }
             break;
           }
@@ -8588,6 +8607,30 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
       }
     }
 
+    // Complete newly added AI rules after every user column has its final ID.
+    ObSEArray<uint64_t, 4> ai_ids;
+    for (auto it = new_table_schema.column_begin(); OB_SUCC(ret) && it != new_table_schema.column_end(); ++it) {
+      if ((*it)->is_ai_column()) { ret = ai_ids.push_back((*it)->get_column_id()); }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ai_ids.count(); ++i) {
+      ObColumnSchemaV2 *result = new_table_schema.get_column_schema(ai_ids.at(i));
+      AiColumnDefinition definition;
+      ObSEArray<ObColumnSchemaV2, 3> auxiliary;
+      if (OB_FAIL(definition.decode(result->get_ai_column_info(), false))) {
+      } else if (definition.state_column_id_ != 0) {
+        // Existing definitions already have their physical columns.
+      } else {
+        for (auto changed = alter_table_schema.column_begin(); changed != alter_table_schema.column_end(); ++changed) {
+          if ((*changed)->get_column_id() == result->get_column_id()) { result->set_schema_version((*changed)->get_schema_version()); }
+        }
+        ret = AiColumnSchemaBuilder::complete(new_table_schema, *result, allocator, &auxiliary);
+        if (OB_FAIL(ret)) { break; }
+        for (int64_t j = 0; OB_SUCC(ret) && j < auxiliary.count(); ++j) {
+          ret = ddl_operator.insert_single_column(trans, new_table_schema, auxiliary.at(j));
+        }
+        if (OB_SUCC(ret)) { ret = AiColumnMetadata::store(trans, *result, result->get_schema_version()); }
+      }
+    }
     bool is_add_lob = false;
     if(OB_FAIL(ret)) {
     } else if (OB_FAIL(blocksstable::check_skip_index_valid(new_table_schema))) {

@@ -360,6 +360,8 @@ protected:
                                    ObIArray<ObQualifiedName> &columns,
                                    ObIArray<ObRawExpr*> &real_exprs,
                                    ObRawExpr *&real_ref_expr);
+  int record_ai_column_read(const ColumnItem &column);
+  void mark_ai_column_dml(const share::schema::ObTableSchema &table);
   int resolve_basic_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_basic_column_item(const TableItem &table_item,
                                 const common::ObString &column_name,

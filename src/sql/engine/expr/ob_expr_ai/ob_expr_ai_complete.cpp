@@ -158,7 +158,10 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     } else {
       ObAIFuncModel model(temp_allocator, *info, *endpoint_info);
       ObString result;
-      if (OB_FAIL(model.call_completion(prompt, config, result))) {
+      const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      const ObString system_prompt = session && session->is_ai_column_internal()
+          ? session->get_ai_column_system_prompt() : ObString();
+      if (OB_FAIL(model.call_completion(prompt, config, result, system_prompt))) {
       } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
       }
     }

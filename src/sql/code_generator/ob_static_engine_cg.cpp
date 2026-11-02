@@ -5902,6 +5902,9 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
     }
   }
 
+  if (OB_SUCC(ret) && log_plan.get_stmt() && log_plan.get_stmt()->get_query_ctx()) {
+    ret = phy_plan_->set_ai_column_read_refs(log_plan.get_stmt()->get_query_ctx()->ai_column_read_refs_);
+  }
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
   }

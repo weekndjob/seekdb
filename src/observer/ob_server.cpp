@@ -902,6 +902,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 
 void ObServer::destroy()
 {
+  ai_column_worker_.stop();
+  ai_column_worker_.wait();
   // observer.destroy() be called under two scenarios:
   // 1. main() exit
   // 2. ObServer destruction.
@@ -1335,6 +1337,11 @@ int ObServer::start()
       LOG_ERROR("fail to start standby gRPC service", KR(ret));
     }
 
+  if (OB_SUCC(ret) && OB_FAIL(ai_column_worker_.initialize(sql_proxy_))) {
+    LOG_ERROR("failed to initialize AI column worker", K(ret));
+  } else if (OB_SUCC(ret) && OB_FAIL(ai_column_worker_.start())) {
+    LOG_ERROR("failed to start AI column worker", K(ret));
+  }
   int64_t start_service_time = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
     LOG_ERROR("failure occurs, stop observer startup", KR(ret));
@@ -1552,6 +1559,8 @@ int ObServer::stop()
   int ret = OB_SUCCESS;
   int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
+  ai_column_worker_.stop();
+  ai_column_worker_.wait();
   LOG_DBA_INFO_V2(OB_SERVER_STOP_BEGIN, "observer stop begin.");
 
   if (in_process_) {
