@@ -2115,6 +2115,10 @@ int batch_add_ai_columns(ObISQLClient &sql_client,
           ret = normalized.assign_fmt("%.*s /* Return exactly one valid JSON value */",
                                       column.get_ai_expression().length(),
                                       column.get_ai_expression().ptr());
+        } else if (OB_SUCC(ret) && ob_is_integer_type(column.get_data_type())) {
+          ret = normalized.assign_fmt("%.*s /* Return exactly one base-10 integer */",
+                                      column.get_ai_expression().length(),
+                                      column.get_ai_expression().ptr());
         } else if (OB_SUCC(ret)) {
           ret = normalized.assign_fmt("%.*s", column.get_ai_expression().length(),
                                       column.get_ai_expression().ptr());

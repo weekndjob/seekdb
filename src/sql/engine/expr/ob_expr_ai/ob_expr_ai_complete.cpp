@@ -142,6 +142,20 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
       }
     }
 
+    ObString ai_column_system_prompt;
+    if (OB_SUCC(ret) && config != nullptr) {
+      const ObString key = ObString::make_string("__ai_column_system_prompt");
+      ObJsonNode *node = config->get_value(key);
+      if (node != nullptr) {
+        if (node->json_type() != ObJsonNodeType::J_STRING) {
+          ret = OB_INVALID_ARGUMENT;
+        } else {
+          ai_column_system_prompt = static_cast<ObJsonString *>(node)->get_str();
+          ret = config->remove(key);
+        }
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else if (model_id.empty() || prompt.empty()) {
       ret = OB_INVALID_ARGUMENT;
@@ -158,7 +172,7 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     } else {
       ObAIFuncModel model(temp_allocator, *info, *endpoint_info);
       ObString result;
-      if (OB_FAIL(model.call_completion(prompt, config, result))) {
+      if (OB_FAIL(model.call_completion(prompt, config, result, &ai_column_system_prompt))) {
       } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
       }
     }

@@ -40,6 +40,15 @@ private:
   common::ObArenaAllocator allocator_;
 };
 
+class ObAiColumnWorkerTask : private common::ObTimerTask
+{
+public:
+  int schedule(common::ObTimer &timer);
+private:
+  void runTimerTask() override;
+  static constexpr int64_t SCHEDULE_PERIOD = 200 * 1000L;
+};
+
 class ObSqlMemoryTimerTask : private common::ObTimerTask
 {
 public:
