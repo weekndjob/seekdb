@@ -359,6 +359,14 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
+  } else if (node.num_child_ > 1 && [&]() {
+      for (int64_t i = 0; i < node.num_child_; ++i) {
+        if (node.children_[i] != nullptr && node.children_[i]->type_ == T_ALTER_AI_COLUMN_RETRY) return true;
+      }
+      return false;
+    }()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "combining AI COLUMN RETRY with another ALTER action");
   } else {
     // Get the existing index name in the table, and initialize current_index_name_set_
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -403,6 +411,71 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
       } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
       } else {
         switch (action_node->type_) {
+        case T_ALTER_AI_COLUMN_RETRY: {
+
+
+          const ObColumnSchemaV2 *column = nullptr;
+          if (action_node->num_child_ != 2 || action_node->children_ == nullptr ||
+              action_node->children_[0] == nullptr) {
+            ret = OB_ERR_UNEXPECTED;
+          } else {
+            ParseNode *name_node = action_node->children_[0];
+            ObString column_name(name_node->str_len_, name_node->str_value_);
+            column = table_schema_->get_column_schema(column_name);
+            if (column == nullptr || !column->is_ai_result_column()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "retrying a column that is not an AI column");
+            } else {
+              alter_table_stmt->set_ai_retry_column_id(column->get_column_id());
+              alter_table_stmt->set_ai_retry_column_name(column->get_column_name_str());
+              if (table_schema_->get_rowkey_column_num() <= 0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "retrying an AI column without a primary key");
+              }
+              for (int64_t pos = 1; OB_SUCC(ret) && pos <= table_schema_->get_rowkey_column_num(); ++pos) {
+                const ObColumnSchemaV2 *key = nullptr;
+                for (ObTableSchema::const_column_iterator it = table_schema_->column_begin();
+                     it != table_schema_->column_end(); ++it) {
+                  if (*it != nullptr && (*it)->get_rowkey_position() == pos) {
+                    key = *it;
+                    break;
+                  }
+                }
+                ObString copy;
+                if (key == nullptr) {
+                  ret = OB_SCHEMA_ERROR;
+                } else if (OB_FAIL(ob_write_string(*allocator_, key->get_column_name_str(), copy))) {
+                } else if (OB_FAIL(alter_table_stmt->get_ai_retry_key_names().push_back(copy))) {
+                }
+              }
+              if (action_node->children_[1] != nullptr) {
+                ObString sql = params_.cur_sql_;
+                int64_t where_pos = -1;
+                for (int64_t j = 0; j + 5 <= sql.length(); ++j) {
+                  if (0 == strncasecmp(sql.ptr() + j, "where", 5) &&
+                      (j == 0 || isspace(sql.ptr()[j - 1])) &&
+                      (j + 5 == sql.length() || isspace(sql.ptr()[j + 5]))) {
+                    where_pos = j + 5;
+                    break;
+                  }
+                }
+                if (where_pos < 0) {
+                  ret = OB_ERR_UNEXPECTED;
+                } else {
+                  int64_t end = sql.length();
+                  while (end > where_pos && (isspace(sql.ptr()[end - 1]) || sql.ptr()[end - 1] == ';')) --end;
+                  ObString where(end - where_pos, sql.ptr() + where_pos);
+                  ObString copy;
+                  if (OB_FAIL(ob_write_string(*allocator_, where, copy))) {
+                  } else {
+                    alter_table_stmt->set_ai_retry_where(copy);
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
         //deal with alter table option
         case T_ALTER_TABLE_OPTION: {
             alter_table_stmt->set_alter_table_option();
@@ -748,6 +821,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     }
     } // end for heap_vars_2.
   }
+  if (OB_FAIL(ret)) { SQL_RESV_LOG(WARN, "AI retry action resolution failed", K(ret)); }
   return ret;
 }
 

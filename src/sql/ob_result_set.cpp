@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_result_set.h"
+#include "lib/string/ob_sql_string.h"
+#include "share/ob_server_struct.h"
 #include "data_plane/transaction/ob_tx_desc_access.h"
 #include "share/rc/ob_server_runtime.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
@@ -211,6 +213,59 @@ int ObResultSet::execute()
   return ret;
 }
 
+namespace {
+int check_ai_column_strict_read(const ObPhysicalPlan &plan, ObSQLSessionInfo &session,
+                                ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t enabled = 0;
+  if (plan.get_ai_column_refs().count() == 0) {
+  } else if (OB_FAIL(session.get_sys_variable(oceanbase::share::SYS_VAR_AI_COLUMN_STRICT_READ, enabled))) {
+  } else if (enabled == 0) {
+  } else if (ctx.get_sql_ctx() == nullptr || ctx.get_sql_ctx()->schema_guard_ == nullptr ||
+             GCTX.sql_proxy_ == nullptr) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    oceanbase::share::schema::ObSchemaGetterGuard *guard = ctx.get_sql_ctx()->schema_guard_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan.get_ai_column_refs().count(); ++i) {
+      const ObAiColumnRef &ref = plan.get_ai_column_refs().at(i);
+      const oceanbase::share::schema::ObTableSchema *table = nullptr;
+      const oceanbase::share::schema::ObDatabaseSchema *db = nullptr;
+      ObSqlString sql;
+      if (OB_FAIL(guard->get_table_schema(ref.table_id_, table))) {
+      } else if (table == nullptr) {
+        ret = OB_SCHEMA_ERROR;
+      } else if (OB_FAIL(guard->get_database_schema(table->get_database_id(), db))) {
+      } else if (db == nullptr) {
+        ret = OB_SCHEMA_ERROR;
+      } else if (OB_FAIL(sql.assign_fmt(
+          "select 1 from `%.*s`.`%.*s` where `__ai_state_%lu` is null "
+          "or `__ai_state_%lu`<>2 limit 1",
+          db->get_database_name_str().length(), db->get_database_name_str().ptr(),
+          table->get_table_name_str().length(), table->get_table_name_str().ptr(),
+          ref.column_id_, ref.column_id_))) {
+      } else {
+        SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+          if (OB_FAIL(GCTX.sql_proxy_->read(result, sql.ptr()))) {
+          } else if (result.get_result() == nullptr) {
+            ret = OB_ERR_UNEXPECTED;
+          } else {
+            const int next_ret = result.get_result()->next();
+            if (next_ret == OB_SUCCESS) {
+              ret = OB_AI_COLUMN_UNFINISHED;
+              LOG_USER_ERROR(OB_AI_COLUMN_UNFINISHED, ref.table_id_, ref.column_id_);
+            } else if (next_ret != OB_ITER_END) {
+              ret = next_ret;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+} // namespace
+
 int ObResultSet::open_result()
 {
   int ret = OB_SUCCESS;
@@ -218,6 +273,9 @@ int ObResultSet::open_result()
   if (NULL != physical_plan_) {
     if (OB_ISNULL(exec_result_)) {
       ret = OB_ERR_UNEXPECTED;
+    } else if (!is_inner_result_set_ &&
+               OB_FAIL(check_ai_column_strict_read(*physical_plan_, my_session_, get_exec_context()))) {
+      SQL_LOG(WARN, "AI column strict read failed", K(ret));
     } else if (OB_FAIL(exec_result_->open(get_exec_context()))) {
       if (OB_TRANSACTION_SET_VIOLATION != ret && OB_TRY_LOCK_ROW_CONFLICT != ret) {
         SQL_LOG(WARN, "fail open main query", K(ret));

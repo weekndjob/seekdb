@@ -20,11 +20,93 @@
 #include "sql/code_generator/ob_code_generator.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/engine/ob_physical_plan.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
+#include "share/schema/ob_schema_getter_guard.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+namespace {
+int collect_ai_condition_refs(const ObRawExpr &expr, const ObDMLStmt &stmt,
+                              share::schema::ObSchemaGetterGuard &guard,
+                              ObPhysicalPlan &plan)
+{
+  int ret = OB_SUCCESS;
+  if (expr.is_column_ref_expr()) {
+    const ObColumnRefRawExpr &ref = static_cast<const ObColumnRefRawExpr&>(expr);
+    uint64_t table_id = ref.get_table_id();
+    for (int64_t i = 0; i < stmt.get_table_items().count(); ++i) {
+      const TableItem *item = stmt.get_table_items().at(i);
+      if (item != nullptr && item->table_id_ == table_id && item->ref_id_ != OB_INVALID_ID) {
+        table_id = item->ref_id_;
+        break;
+      }
+    }
+    const share::schema::ObTableSchema *table = nullptr;
+    if (OB_SUCCESS == guard.get_table_schema(table_id, table) && table != nullptr) {
+      const share::schema::ObColumnSchemaV2 *column = table->get_column_schema(ref.get_column_id());
+      if (column != nullptr && column->is_ai_result_column()) {
+        bool found = false;
+        for (int64_t i = 0; i < plan.get_ai_column_refs().count(); ++i) {
+          const ObAiColumnRef &existing = plan.get_ai_column_refs().at(i);
+          found = found || (existing.table_id_ == table_id && existing.column_id_ == ref.get_column_id());
+        }
+        if (!found && OB_FAIL(plan.get_ai_column_refs().push_back(
+            ObAiColumnRef(table_id, ref.get_column_id())))) {
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); ++i) {
+    const ObRawExpr *child = expr.get_param_expr(i);
+    if (child != nullptr && OB_FAIL(collect_ai_condition_refs(*child, stmt, guard, plan))) {
+    }
+  }
+  return ret;
+}
+
+int collect_ai_column_refs(const ObDMLStmt &stmt,
+                           share::schema::ObSchemaGetterGuard &guard,
+                           ObPhysicalPlan &plan)
+{
+  int ret = OB_SUCCESS;
+  const common::ObIArray<ColumnItem> &columns = stmt.get_column_items();
+  for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+    const ColumnItem &item = columns.at(i);
+    const uint64_t table_id = item.base_tid_ != OB_INVALID_ID ? item.base_tid_ : item.table_id_;
+    const uint64_t column_id = item.base_cid_ != OB_INVALID_ID ? item.base_cid_ : item.column_id_;
+    const share::schema::ObTableSchema *table = nullptr;
+    if (OB_SUCCESS == guard.get_table_schema(table_id, table) && table != nullptr) {
+      const share::schema::ObColumnSchemaV2 *column = table->get_column_schema(column_id);
+      if (column != nullptr && column->is_ai_result_column()) {
+        bool found = false;
+        for (int64_t j = 0; j < plan.get_ai_column_refs().count(); ++j) {
+          const ObAiColumnRef &ref = plan.get_ai_column_refs().at(j);
+          found = found || (ref.table_id_ == table_id && ref.column_id_ == column_id);
+        }
+        if (!found && OB_FAIL(plan.get_ai_column_refs().push_back(ObAiColumnRef(table_id, column_id)))) {
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_condition_exprs().count(); ++i) {
+    const ObRawExpr *expr = stmt.get_condition_exprs().at(i);
+    if (expr != nullptr && OB_FAIL(collect_ai_condition_refs(*expr, stmt, guard, plan))) {
+    }
+  }
+  ObSEArray<ObSelectStmt*, 4> children;
+  if (OB_SUCC(ret) && OB_FAIL(stmt.get_child_stmts(children))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < children.count(); ++i) {
+    if (children.at(i) != nullptr && OB_FAIL(
+        collect_ai_column_refs(*children.at(i), guard, plan))) {
+    }
+  }
+  return ret;
+}
+} // namespace
 
 int ObCodeGenerator::generate(const ObLogPlan &log_plan,
                               ObPhysicalPlan &phy_plan)
@@ -32,6 +114,13 @@ int ObCodeGenerator::generate(const ObLogPlan &log_plan,
   int ret = OB_SUCCESS;
   int64_t batch_size = 0;
   OZ(detect_batch_size(log_plan, batch_size));
+  if (OB_SUCC(ret) && log_plan.get_stmt() != nullptr &&
+      log_plan.get_optimizer_context().get_exec_ctx() != nullptr &&
+      log_plan.get_optimizer_context().get_exec_ctx()->get_sql_ctx() != nullptr &&
+      log_plan.get_optimizer_context().get_exec_ctx()->get_sql_ctx()->schema_guard_ != nullptr) {
+    OZ(collect_ai_column_refs(*log_plan.get_stmt(),
+        *log_plan.get_optimizer_context().get_exec_ctx()->get_sql_ctx()->schema_guard_, phy_plan));
+  }
   if (OB_SUCC(ret) && batch_size > 0) {
     log_plan.get_optimizer_context().set_batch_size(batch_size);
     phy_plan.set_batch_size(batch_size);

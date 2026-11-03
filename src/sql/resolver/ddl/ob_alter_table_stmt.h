@@ -46,6 +46,15 @@ public:
 
   uint64_t get_alter_table_action_count() { return alter_table_action_count_; }
   void inc_alter_table_action_count() { ++alter_table_action_count_; }
+  bool is_ai_column_retry() const { return ai_retry_column_id_ != OB_INVALID_ID; }
+  void set_ai_retry_column_id(uint64_t id) { ai_retry_column_id_ = id; }
+  uint64_t get_ai_retry_column_id() const { return ai_retry_column_id_; }
+  void set_ai_retry_column_name(const common::ObString &name) { ai_retry_column_name_ = name; }
+  const common::ObString &get_ai_retry_column_name() const { return ai_retry_column_name_; }
+  common::ObIArray<common::ObString> &get_ai_retry_key_names() { return ai_retry_key_names_; }
+  const common::ObIArray<common::ObString> &get_ai_retry_key_names() const { return ai_retry_key_names_; }
+  void set_ai_retry_where(const common::ObString &where) { ai_retry_where_ = where; }
+  const common::ObString &get_ai_retry_where() const { return ai_retry_where_; }
 
 
   bool is_alter_system() const { return is_alter_system_; }
@@ -113,6 +122,10 @@ private:
   bool is_alter_triggers_;
   obcall::ObAlterTriggerArg tg_arg_;
   uint64_t alter_table_action_count_;
+  uint64_t ai_retry_column_id_;
+  common::ObString ai_retry_where_;
+  common::ObString ai_retry_column_name_;
+  common::ObSEArray<common::ObString, 4> ai_retry_key_names_;
   obcall::ObExchangePartitionArg exchange_partition_arg_;
 };
 

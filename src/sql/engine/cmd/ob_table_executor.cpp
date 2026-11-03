@@ -16,6 +16,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "config_bridge.h"
+#include <atomic>
+#include <vector>
+#include <string>
+#include "common/mysqlclient/ob_mysql_transaction.h"
 #include "common/ob_timeout_ctx.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "share/ob_server_struct.h"
@@ -751,6 +755,185 @@ int ObAlterTableExecutor::alter_table_exchange_partition_rpc(obcall::ObExchangeP
   return ret;
 }
 
+namespace {
+int ai_retry_append_where(ObSqlString &sql, const ObString &predicate, uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  if (predicate.empty()) return ret;
+  std::string text(predicate.ptr(), predicate.length());
+  std::string rewritten;
+  char quote = 0;
+  for (size_t i = 0; i < text.size();) {
+    const char ch = text[i];
+    if (quote != 0) {
+      rewritten += ch;
+      if (ch == quote && (i == 0 || text[i - 1] != '\\')) quote = 0;
+      ++i;
+    } else if (ch == '\'' || ch == '"' || ch == '`') {
+      quote = ch;
+      rewritten += ch;
+      ++i;
+    } else if (i + 6 <= text.size() && strncasecmp(text.c_str() + i, "status", 6) == 0 &&
+               (i == 0 || !(isalnum(text[i - 1]) || text[i - 1] == '_')) &&
+               (i + 6 == text.size() || !(isalnum(text[i + 6]) || text[i + 6] == '_'))) {
+      char buf[80];
+      snprintf(buf, sizeof(buf), "`__ai_state_%lu`", column_id);
+      rewritten += buf;
+      i += 6;
+      size_t k = i;
+      while (k < text.size() && isspace(text[k])) ++k;
+      if (k < text.size() && text[k] == '=') {
+        ++k;
+        while (k < text.size() && isspace(text[k])) ++k;
+        if (k < text.size() && text[k] == '\'') {
+          const size_t end = text.find('\'', k + 1);
+          if (end != std::string::npos) {
+            const std::string state = text.substr(k + 1, end - k - 1);
+            int state_code = -1;
+            if (strcasecmp(state.c_str(), "PENDING") == 0) state_code = 0;
+            else if (strcasecmp(state.c_str(), "RUNNING") == 0) state_code = 1;
+            else if (strcasecmp(state.c_str(), "READY") == 0) state_code = 2;
+            else if (strcasecmp(state.c_str(), "FAILED") == 0) state_code = 3;
+            if (state_code >= 0) {
+              rewritten.append(text, i, k - i);
+              rewritten += std::to_string(state_code);
+              i = end + 1;
+            }
+          }
+        }
+      }
+    } else {
+      rewritten += ch;
+      ++i;
+    }
+  }
+  return sql.append_fmt(" where %s", rewritten.c_str());
+}
+
+struct AiRetryRow
+{
+  std::string predicate_;
+};
+
+int execute_ai_column_retry(ObAlterTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected = 0;
+  int64_t version = 0;
+  ObSqlString sql;
+  const uint64_t table_id = ObSchemaUtils::get_extract_schema_id(
+      stmt.get_alter_table_schema().get_table_id());
+  const uint64_t column_id = stmt.get_ai_retry_column_id();
+  const ObString &db = stmt.get_org_database_name();
+  const ObString &table = stmt.get_org_table_name();
+  const ObString &column = stmt.get_ai_retry_column_name();
+  std::vector<std::string> key_names;
+  std::vector<AiRetryRow> rows;
+  if (GCTX.sql_proxy_ == nullptr) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    for (int64_t i = 0; i < stmt.get_ai_retry_key_names().count(); ++i) {
+      const ObString &name = stmt.get_ai_retry_key_names().at(i);
+      key_names.emplace_back(name.ptr(), name.length());
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(sql.assign_fmt(
+        "select definition_version from oceanbase.__all_ai_column "
+        "where table_id=%lu and column_id=%lu", table_id, column_id))) {
+  } else if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      if (OB_FAIL(GCTX.sql_proxy_->read(result, sql.ptr()))) {
+      } else if (result.get_result() == nullptr) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(result.get_result()->next())) {
+      } else if (OB_FAIL(result.get_result()->get_int("definition_version", version))) {
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(sql.assign_fmt("select "))) {
+  }
+  for (size_t i = 0; OB_SUCC(ret) && i < key_names.size(); ++i) {
+    if (OB_FAIL(sql.append_fmt("%squote(`%s`) as `__ai_retry_key_%zu`",
+        i == 0 ? "" : ",", key_names[i].c_str(), i))) {
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(sql.append_fmt(
+      " from `%.*s`.`%.*s`", db.length(), db.ptr(), table.length(), table.ptr()))) {
+  } else if (OB_SUCC(ret) && OB_FAIL(
+      ai_retry_append_where(sql, stmt.get_ai_retry_where(), column_id))) {
+  } else if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      if (OB_FAIL(GCTX.sql_proxy_->read(result, sql.ptr()))) {
+      } else if (result.get_result() == nullptr) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        int next_ret = OB_SUCCESS;
+        while (OB_SUCC(ret) && OB_SUCCESS == (next_ret = result.get_result()->next())) {
+          AiRetryRow row;
+          ObSqlString predicate;
+          for (size_t j = 0; OB_SUCC(ret) && j < key_names.size(); ++j) {
+            char alias[80];
+            snprintf(alias, sizeof(alias), "__ai_retry_key_%zu", j);
+            ObString literal;
+            if (OB_FAIL(result.get_result()->get_varchar(alias, literal))) {
+            } else if (OB_FAIL(predicate.append_fmt("%s`%s` = %.*s",
+                j == 0 ? "" : " and ", key_names[j].c_str(),
+                literal.length(), literal.ptr()))) {
+            }
+          }
+          if (OB_SUCC(ret)) {
+            row.predicate_.assign(predicate.ptr(), predicate.length());
+            rows.push_back(row);
+          }
+        }
+        if (OB_SUCC(ret) && next_ret != OB_ITER_END) ret = next_ret;
+      }
+    }
+  }
+  ObMySQLTransaction trans;
+  if (OB_SUCC(ret) && !rows.empty() && OB_FAIL(trans.start(GCTX.sql_proxy_))) {
+  }
+  static std::atomic<uint64_t> request_sequence(
+      static_cast<uint64_t>(ObTimeUtility::current_time()));
+  for (size_t i = 0; OB_SUCC(ret) && i < rows.size(); ++i) {
+    const uint64_t request_id = request_sequence.fetch_add(1, std::memory_order_relaxed);
+    ObSqlString hex;
+    if (OB_FAIL(hex.append("0x"))) {
+    }
+    for (size_t j = 0; OB_SUCC(ret) && j < rows[i].predicate_.size(); ++j) {
+      ret = hex.append_fmt("%02x", static_cast<unsigned char>(rows[i].predicate_[j]));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(sql.assign_fmt(
+        "delete from oceanbase.__all_ai_column_task where table_id=%lu "
+        "and column_id=%lu and request_id=(select `__ai_request_%lu` "
+        "from `%.*s`.`%.*s` where %s)",
+        table_id, column_id, column_id, db.length(), db.ptr(),
+        table.length(), table.ptr(), rows[i].predicate_.c_str()))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(trans.write(sql.ptr(), affected))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(sql.assign_fmt(
+        "update `%.*s`.`%.*s` set `%.*s`=null,`__ai_state_%lu`=0,"
+        "`__ai_request_%lu`=%lu where %s",
+        db.length(), db.ptr(), table.length(), table.ptr(), column.length(), column.ptr(),
+        column_id, column_id, request_id, rows[i].predicate_.c_str()))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(trans.write(sql.ptr(), affected))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(sql.assign_fmt(
+        "insert into oceanbase.__all_ai_column_task "
+        "(table_id,column_id,task_id,rowkey_predicate,request_id,"
+        "definition_version,state,retry_count,eligible_ts) "
+        "values (%lu,%lu,%lu,%s,%lu,%ld,0,0,now(6))",
+        table_id, column_id, request_id, hex.ptr(), request_id, version))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(trans.write(sql.ptr(), affected))) {
+    }
+  }
+  if (trans.is_started()) {
+    const int end_ret = trans.end(OB_SUCC(ret));
+    if (OB_SUCC(ret) && end_ret != OB_SUCCESS) ret = end_ret;
+  }
+  if (OB_FAIL(ret)) { LOG_WARN("AI retry execution failed", K(ret), K(sql), K(rows.size())); }
+  return ret;
+}
+} // namespace
+
 int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -758,10 +941,14 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
   obcall::ObAlterTableArg &alter_table_arg = stmt.get_alter_table_arg();
   obcall::ObExchangePartitionArg &exchange_partition_arg = stmt.get_exchange_partition_arg();
   ObString first_stmt;
-  OZ (stmt.get_first_stmt(first_stmt));
-  OV (OB_NOT_NULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
+  if (!stmt.is_ai_column_retry()) {
+    OZ(stmt.get_first_stmt(first_stmt));
+    OV(OB_NOT_NULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
+  }
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (stmt.is_ai_column_retry()) {
+    ret = execute_ai_column_retry(stmt);
   } else if (stmt.is_alter_triggers()) {
     if (stmt.get_tg_arg().trigger_infos_.count() > 0) {
       stmt.get_tg_arg().ddl_stmt_str_ = first_stmt;

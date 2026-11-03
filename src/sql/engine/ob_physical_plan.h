@@ -57,6 +57,15 @@ typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>
 typedef common::ObFixedArray<ObTableLocation, common::ObIAllocator> TableLocationFixedArray;
 typedef common::ObFixedArray<ObPlanPwjConstraint, common::ObIAllocator> PlanPwjConstraintArray;
 
+struct ObAiColumnRef
+{
+  uint64_t table_id_;
+  uint64_t column_id_;
+  ObAiColumnRef() : table_id_(OB_INVALID_ID), column_id_(OB_INVALID_ID) {}
+  ObAiColumnRef(uint64_t table_id, uint64_t column_id)
+      : table_id_(table_id), column_id_(column_id) {}
+};
+
 class ObPhysicalPlan : public ObPlanCacheObject
 {
 public:
@@ -76,6 +85,8 @@ public:
   void set_is_last_exec_succ(bool val) { stat_.is_last_exec_succ_ = val; }
   bool is_last_exec_succ() const { return stat_.is_last_exec_succ_; }
   const ObString &get_constructed_sql() const { return stat_.constructed_sql_; }
+  common::ObIArray<ObAiColumnRef> &get_ai_column_refs() { return ai_column_refs_; }
+  const common::ObIArray<ObAiColumnRef> &get_ai_column_refs() const { return ai_column_refs_; }
   bool with_rows() const
   { return ObStmt::is_select_stmt(stmt_type_) || need_drive_dml_query_; }
   //user var
@@ -407,6 +418,7 @@ private:
    */
 
   //for fill_result_set
+  common::ObSEArray<ObAiColumnRef, 4> ai_column_refs_;
   common::ColumnsFieldArray field_columns_;
   common::ParamsFieldArray param_columns_;
   common::ObFixedArray<share::AutoincParam, common::ObIAllocator> autoinc_params_; //auto-increment param

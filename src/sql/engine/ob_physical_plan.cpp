@@ -127,6 +127,7 @@ void ObPhysicalPlan::reset()
   root_op_spec_ = NULL;
   param_count_ = 0;
   signature_ = 0;
+  ai_column_refs_.reset();
   field_columns_.reset();
   param_columns_.reset();
   autoinc_params_.reset();
