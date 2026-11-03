@@ -1,0 +1,64 @@
+{
+  "baseline_sha256": "efea0268c1ca060013175584bf3a854b35455a644ab8f4eb1616c689a4bdcc7c",
+  "candidate_sha256": "61ec96fef2fc84972e643e838b0cd6961c6333efcce7e8aaf79c28e0452b1152",
+  "source_sha256": {
+    "src/data_plane/api/data_plane/fts/ob_fts_struct.h": "ca8805b2f32adaea4819102a72e29c0d2246295b59a7ec578a5bd9782c92ed8b",
+    "src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp": "476eff31bed4f4377f8e833d542d65f7307cae37fbd58df127770a7a9d2b69ef",
+    "src/sql/das/iter/ob_das_text_retrieval_merge_iter.cpp": "f7e452cb4c20a044b6d00a0547213919b7523b8d152b1f4d18858a724913bf5d",
+    "src/sql/optimizer/ob_join_order.cpp": "6f9b14b2d65943fe70564cad070489add216c87cc4e47049a8351a556a53e1dc",
+    "src/storage/fts/dict/ob_ft_range_dict.cpp": "8e016e92db25e141916a3c32fc75eb366842d26e286308660257240fe1d21e61",
+    "src/storage/fts/dict/ob_ft_range_dict.h": "cea4913a9ab67c1d9bbdacef7e8e7ef8a7109673de03bc9774f68b7b5f9fcacc",
+    "src/storage/fts/ik/ob_ik_arbitrator.cpp": "7e7e1d01ab454e8b2206533803008974507edb1fbba2ebb13bf7fb71d881c7ad",
+    "src/storage/fts/ik/ob_ik_arbitrator.h": "fc751a1938ce35b3081c912a94fa6b342e2ddf1ad81f0ec080e20f23cdb2dee5",
+    "src/storage/fts/ob_fts_stop_word.cpp": "d50b1f1ee56c9650233e7fac7f58c2ead0cf55755c5064221bed965c0a80a9fc",
+    "src/storage/fts/ob_ik_ft_parser.cpp": "00964d330fdafc12954c0de04cd340a12ae00495288ac801edd980c0170904fb",
+    "src/storage/fts/ob_ik_ft_parser.h": "9d5a5935041cf7dacd33536e9a1ca97f2307de2865e19fab80f66af2a8a24e36",
+    "src/storage/retrieval/ob_sparse_daat_iter.cpp": "a051b68814de035dd4041781539d6d799ae5535dfb98abc1ad0d99d381fffe7c",
+    "src/storage/retrieval/ob_sparse_daat_iter.h": "ff620569554b492860eba1636652b5441e2b8d5d93debd64b1aab525b7f27d85",
+    "src/storage/retrieval/ob_sparse_retrieval_util.h": "3f14dcf5d74ef55561857b59649551fc9976cc67a678deeb0df255c779a80129",
+    "unittest/sql/fts/test_fts_allocation_and_normalization.cpp": "b8ff903fbfc15197ab42b235b98984246e9313a6eb35d0f39c99bfd6a16832fb"
+  },
+  "checks": [
+    {
+      "script": "capture-fts-correctness.py",
+      "label": "before-local-word-map",
+      "status": "passed"
+    },
+    {
+      "script": "capture-fts-correctness.py",
+      "label": "after-local-word-map",
+      "status": "passed"
+    },
+    {
+      "comparison": "-correctness.json",
+      "identical": true,
+      "before_sha256": "45cae833284be28c7f423245487c8e99fc3f763cbaa76013473002348a8a6049",
+      "after_sha256": "45cae833284be28c7f423245487c8e99fc3f763cbaa76013473002348a8a6049"
+    },
+    {
+      "script": "capture-parallel-fts.py",
+      "label": "before-local-word-map",
+      "status": "passed"
+    },
+    {
+      "script": "capture-parallel-fts.py",
+      "label": "after-local-word-map",
+      "status": "passed"
+    },
+    {
+      "comparison": "-parallel-correctness.json",
+      "identical": true,
+      "before_sha256": "1ce121deef541446d089bcc0a84f182eef58c7b2e9708be80a04e5ab8b58e430",
+      "after_sha256": "1ce121deef541446d089bcc0a84f182eef58c7b2e9708be80a04e5ab8b58e430"
+    },
+    {
+      "script": "verify-fts-official.py",
+      "status": "passed"
+    },
+    {
+      "script": "run-ddl-concurrency.py",
+      "status": "passed"
+    }
+  ],
+  "status": "passed"
+}

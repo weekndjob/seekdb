@@ -3,10 +3,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <random>
+#include <set>
+#include <memory>
+#include <thread>
 #include <string>
 #include <unordered_set>
 #include <vector>
 #include "storage/fts/dict/ob_ft_range_dict.h"
+#include "storage/fts/dict/ob_ft_trie.h"
 #include "storage/fts/ik/ob_ik_arbitrator.h"
 #include "storage/fts/ik/ob_ik_processor.h"
 #include "storage/fts/ob_fts_stop_word.h"
@@ -53,6 +57,53 @@ public:
     for (void *ptr : live) { std::free(ptr); }
   }
 };
+}
+
+TEST(FtsRangeDictionary, BinaryBoundariesPreserveLegacySelection)
+{
+  ObArenaAllocator allocator;
+  ObFTCacheRangeContainer container(allocator);
+  const std::vector<std::set<std::string>> ranges = {
+      {"a", "f", "z"}, {"m", "q"}, {"中", "文", "汉"}};
+  std::vector<ObFTDAT *> data;
+  std::vector<std::unique_ptr<ObDictCacheValue>> values;
+  for (const auto &words : ranges) {
+    ObFTTrie<void> trie(allocator, CS_TYPE_UTF8MB4_BIN);
+    for (const auto &word : words) {
+      ASSERT_EQ(OB_SUCCESS, trie.insert(ObString(word.size(), word.data()), {}));
+    }
+    ObFTDATBuilder<void> builder(allocator);
+    ASSERT_EQ(OB_SUCCESS, builder.init(trie));
+    ASSERT_EQ(OB_SUCCESS, builder.build_from_trie(trie));
+    ObFTDAT *block = nullptr;
+    size_t size = 0;
+    ASSERT_EQ(OB_SUCCESS, builder.get_mem_block(block, size));
+    data.push_back(block);
+    values.emplace_back(new ObDictCacheValue(block));
+    ObFTCacheRangeHandle *handle = nullptr;
+    ASSERT_EQ(OB_SUCCESS, container.fetch_info_for_dict(handle));
+    handle->value_ = values.back().get();
+  }
+  ObFTDictDesc description("test", ObFTDictType::DICT_IK_MAIN, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_BIN);
+  ObFTRangeDict dictionary(allocator, &container, description);
+  ASSERT_EQ(OB_SUCCESS, dictionary.init());
+  std::vector<std::string> probes = {"中", "文", "汉", "一", "末", "河", "😀", "𠀀"};
+  for (int i = 0; i < 256; ++i) { probes.emplace_back(1, static_cast<char>(i)); }
+  for (const auto &probe : probes) {
+    const ObString key(probe.size(), probe.data());
+    size_t selected = ranges.size();
+    for (size_t i = 0; i < data.size(); ++i) {
+      if (ObCharset::strcmp(CS_TYPE_UTF8MB4_BIN, data[i]->start_word_.get_word(), key) <= 0
+          && ObCharset::strcmp(CS_TYPE_UTF8MB4_BIN, data[i]->end_word_.get_word(), key) >= 0) {
+        selected = i;
+        break;
+      }
+    }
+    ObDATrieHit hit(nullptr, 0);
+    ASSERT_EQ(OB_SUCCESS, dictionary.match(key, hit));
+    EXPECT_EQ(selected != ranges.size(), hit.dict_ != nullptr);
+    EXPECT_EQ(selected != ranges.size() && ranges[selected].count(probe) != 0, hit.is_match());
+  }
 }
 
 TEST(FtsRangeDictionary, ReleasesOnlyOwnAllocationsIncludingFailurePaths)
@@ -164,6 +215,46 @@ TEST(FtsGrouping, KeepsLegacyFrequencyAndLastEquivalentWordRepresentation)
   EXPECT_EQ(4, frequency); // Existing behavior: first occurrence starts at one.
   EXPECT_EQ(ObString("hello"), words.begin()->first.get_word().get_string());
   words.destroy();
+}
+
+TEST(FtsGrouping, ConcurrentDocumentsKeepIndependentCountsAndReuse)
+{
+  std::vector<std::thread> workers;
+  for (int worker = 0; worker < 4; ++worker) {
+    workers.emplace_back([worker] {
+      ObArenaAllocator allocator;
+      std::vector<std::string> keys;
+      for (int i = 0; i < 10; ++i) {
+        keys.push_back("worker" + std::to_string(worker) + "word" + std::to_string(i));
+      }
+      ObFTWordMap words;
+      ASSERT_EQ(OB_SUCCESS, words.create(2, ObMemAttr("FTWordMapTest")));
+      ObObjMeta meta;
+      meta.set_varchar();
+      meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      ObAddWordFlag flags;
+      flags.set_groupby_word();
+      ObFTParserProperty properties;
+      for (int document = 0; document < 32; ++document) {
+        words.reuse();
+        ObAddWord output(properties, meta, flags, allocator, words);
+        for (int pass = 0; pass < 4; ++pass) {
+          for (const auto &key : keys) {
+            ASSERT_EQ(OB_SUCCESS, output.process_word(
+                key.data(), key.size(), key.size(), document + 1));
+          }
+        }
+        ASSERT_EQ(10, words.size());
+        for (const auto &key : keys) {
+          int64_t frequency = 0;
+          ASSERT_EQ(OB_SUCCESS, words.get_refactored(ObFTWord(key.size(), key.data(), meta), frequency));
+          EXPECT_EQ(1 + 3 * (document + 1), frequency);
+        }
+      }
+      words.destroy();
+    });
+  }
+  for (auto &worker : workers) { worker.join(); }
 }
 
 TEST(FtsEnglishNormalization, LowercaseUppercaseAndUnicodeAcrossDocuments)
