@@ -1,0 +1,11 @@
+{
+  "source_commit": "a582e19f149a71bb23881f0e17ba92154d1ac592",
+  "binary_sha256": "61ec96fef2fc84972e643e838b0cd6961c6333efcce7e8aaf79c28e0452b1152",
+  "instance": "/home/liuzaho/seekdb-workspace/tests/2026-remaining/native-file-ai-final389",
+  "cases": [],
+  "started_at": "2026-11-04 21:01:05.499270",
+  "benchmark_started_at": "2026-11-04 21:01:26.581935",
+  "status": "passed",
+  "server_exit_code": 0,
+  "ended_at": "2026-11-04 21:02:08.251125"
+}

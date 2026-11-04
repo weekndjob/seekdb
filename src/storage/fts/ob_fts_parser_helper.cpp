@@ -350,6 +350,35 @@ int ObFTParseHelper::init(
   return ret;
 }
 
+int ObFTParseHelper::init_default(common::ObIAllocator *allocator, const ObString &parser_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_ISNULL(allocator) || OB_UNLIKELY(parser_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(parser_name_.parse_from_str(parser_name.ptr(), parser_name.length()))) {
+  } else if (OB_FAIL(parser_name_.get_desc(parser_desc_))) {
+  } else if (OB_ISNULL(parser_desc_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(set_add_word_flag(*parser_desc_))) {
+  } else {
+    parser_property_ = ObFTParserProperty();
+    if (parser_name_.is_ik()) {
+      // Match parse_for_parser_helper's canonical dictionary selectors.
+      parser_property_.dict_table_ = ObString(ObFTSLiteral::CONFIG_NAME_DICT_TABLE);
+      parser_property_.stopword_table_ = ObString(ObFTSLiteral::CONFIG_NAME_STOPWORD_TABLE);
+      parser_property_.quantifier_table_ = ObString(ObFTSLiteral::CONFIG_NAME_QUANTIFIER_TABLE);
+    }
+    allocator_ = allocator;
+    is_inited_ = true;
+  }
+  if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
 void ObFTParseHelper::reset()
 {
   parser_desc_ = nullptr;

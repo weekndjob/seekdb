@@ -127,6 +127,12 @@ int ObFTDATBuilder<DATA_TYPE>::build_from_trie(ObFTTrie<DATA_TYPE> &trie)
               child_code = child_index.child_->dat_build_info_.code_;
               if (check[try_base + child_code] != 0) {
                 conflict = true;
+                // The first candidate must still assign codes to every child,
+                // in the original order. Later candidates reuse those codes;
+                // one occupied slot is sufficient to reject the whole base.
+                if (!need_code) {
+                  break;
+                }
               }
             }
           }

@@ -1,0 +1,18 @@
+{
+  "source": "User-provided platform result, 2026-11-04; full commit confirmed by user",
+  "submitted_commit": "05e4778e16ca701cd37cdb36bc95e4691d46e570",
+  "metrics": {
+    "batch":500,"build_beng_en_sec":2.622,"build_ik_all_sec":18.243,
+    "build_ik_content_sec":6.582,"build_total_sec":27.453,
+    "fts_mean_improvement":-0.043577334368957145,"fts_raw_score":0,
+    "git_dirty":1,"query_beng_avg_ms":1.6838,"query_beng_hits":11000,"query_beng_stdev_ms":0.0033,
+    "query_cn_avg_ms":1.1423,"query_cn_hits":8001,"query_cn_stdev_ms":0.0021,
+    "query_limit_avg_ms":1.7105,"query_limit_hits":20,"query_limit_stdev_ms":0.0019,
+    "query_mixed_avg_ms":1.2884,"query_mixed_hits":7332,"query_mixed_stdev_ms":0.0018,
+    "query_rounds":200,"raw_load_rows_per_sec":92592.6,"raw_load_sec":0.216,
+    "rounds":3000,"rows":20000,"samples":3,"select1_avg_ms":0.0249,
+    "select1_stdev_ms":0.0008,"skip_load":0,"tokenize_beng_avg_ms":0.038,
+    "tokenize_beng_median_ms":0.0381,"tokenize_beng_stdev_ms":0.0002,
+    "tokenize_ik_avg_ms":0.0641,"tokenize_ik_median_ms":0.0639,"tokenize_ik_stdev_ms":0.0004,"warmup":30
+  }
+}

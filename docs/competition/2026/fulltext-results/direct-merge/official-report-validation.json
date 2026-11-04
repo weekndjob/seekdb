@@ -1,0 +1,30 @@
+[
+  {
+    "report": "before-direct-merge-benchmark.txt",
+    "official_script_accepted": true,
+    "config_mismatches": [],
+    "july_score_not_platform_score": true,
+    "reference_output_sha256": "42bf08d7ab948cf876805a2712e08a276ff78cc8b1cccaf4930daae8026e83db"
+  },
+  {
+    "report": "before-direct-merge-repeat-benchmark.txt",
+    "official_script_accepted": true,
+    "config_mismatches": [],
+    "july_score_not_platform_score": true,
+    "reference_output_sha256": "f39e21e0d50dc87605e547c974afeb5a870110c8979db4414d4c88de092501b1"
+  },
+  {
+    "report": "after-direct-merge-benchmark.txt",
+    "official_script_accepted": true,
+    "config_mismatches": [],
+    "july_score_not_platform_score": true,
+    "reference_output_sha256": "ad00f2961d334a9f792cf99d4c892e6347f5dd431928d1668c385cdc0c389e68"
+  },
+  {
+    "report": "after-direct-merge-repeat-benchmark.txt",
+    "official_script_accepted": true,
+    "config_mismatches": [],
+    "july_score_not_platform_score": true,
+    "reference_output_sha256": "47e46f1352ab7dfca4c4734c1608a32cca5488808c5b34a4ff28ce6b37a18493"
+  }
+]

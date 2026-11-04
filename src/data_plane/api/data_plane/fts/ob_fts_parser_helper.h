@@ -161,6 +161,9 @@ public:
       common::ObIAllocator *allocator,
       const common::ObString &parser_name,
       const common::ObString &parser_properties);
+  // TOKENIZE without additional options uses the canonical built-in defaults.
+  // Avoid serializing those defaults to JSON only to parse them again.
+  int init_default(common::ObIAllocator *allocator, const common::ObString &parser_name);
   /**
    * Split document into multiple words
    *

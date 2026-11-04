@@ -1,0 +1,537 @@
+{
+  "dags": [
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797289456096,
+      "start_times": [
+        1793797289456175,
+        1793797292291145
+      ],
+      "first_start_delay_sec": 7.9e-05,
+      "later_start_delays_sec": [
+        2.83497
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797289843517,
+      "start_times": [
+        1793797289844942
+      ],
+      "first_start_delay_sec": 0.001425,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252655,
+      "start_times": [
+        1793797292253068
+      ],
+      "first_start_delay_sec": 0.000413,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252714,
+      "start_times": [
+        1793797292253164
+      ],
+      "first_start_delay_sec": 0.00045,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252745,
+      "start_times": [
+        1793797292255623
+      ],
+      "first_start_delay_sec": 0.002878,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252775,
+      "start_times": [
+        1793797292255754
+      ],
+      "first_start_delay_sec": 0.002979,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252803,
+      "start_times": [
+        1793797292261177
+      ],
+      "first_start_delay_sec": 0.008374,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252854,
+      "start_times": [
+        1793797292265436
+      ],
+      "first_start_delay_sec": 0.012582,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797292252883,
+      "start_times": [
+        1793797292276707
+      ],
+      "first_start_delay_sec": 0.023824,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797294816645,
+      "start_times": [
+        1793797294816725,
+        1793797298609550
+      ],
+      "first_start_delay_sec": 8e-05,
+      "later_start_delays_sec": [
+        3.792825
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797298609493,
+      "start_times": [
+        1793797298609653
+      ],
+      "first_start_delay_sec": 0.00016,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797303157075,
+      "start_times": [
+        1793797303157141,
+        1793797308674994
+      ],
+      "first_start_delay_sec": 6.6e-05,
+      "later_start_delays_sec": [
+        5.517853
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797303271538,
+      "start_times": [
+        1793797303271640
+      ],
+      "first_start_delay_sec": 0.000102,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797303271970,
+      "start_times": [
+        1793797303272005
+      ],
+      "first_start_delay_sec": 3.5e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797303272353,
+      "start_times": [
+        1793797303272451
+      ],
+      "first_start_delay_sec": 9.8e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797303272666,
+      "start_times": [
+        1793797303272746
+      ],
+      "first_start_delay_sec": 8e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797303273412,
+      "start_times": [
+        1793797303273726
+      ],
+      "first_start_delay_sec": 0.000314,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797303295449,
+      "start_times": [
+        1793797303295530
+      ],
+      "first_start_delay_sec": 8.1e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797303299761,
+      "start_times": [
+        1793797303299817
+      ],
+      "first_start_delay_sec": 5.6e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797303301167,
+      "start_times": [
+        1793797303301617
+      ],
+      "first_start_delay_sec": 0.00045,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797306256973,
+      "start_times": [
+        1793797306257015,
+        1793797308675106
+      ],
+      "first_start_delay_sec": 4.2e-05,
+      "later_start_delays_sec": [
+        2.418091
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797308674942,
+      "start_times": [
+        1793797308675224,
+        1793797313359626
+      ],
+      "first_start_delay_sec": 0.000282,
+      "later_start_delays_sec": [
+        4.684402
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797309278923,
+      "start_times": [
+        1793797309279240
+      ],
+      "first_start_delay_sec": 0.000317,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797309279000,
+      "start_times": [
+        1793797309279325
+      ],
+      "first_start_delay_sec": 0.000325,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797309279031,
+      "start_times": [
+        1793797309280602
+      ],
+      "first_start_delay_sec": 0.001571,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797309279060,
+      "start_times": [
+        1793797309281074
+      ],
+      "first_start_delay_sec": 0.002014,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797309279089,
+      "start_times": [
+        1793797309281170
+      ],
+      "first_start_delay_sec": 0.002081,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797309312035,
+      "start_times": [
+        1793797309312522
+      ],
+      "first_start_delay_sec": 0.000487,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797309317721,
+      "start_times": [
+        1793797309317766
+      ],
+      "first_start_delay_sec": 4.5e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797309326259,
+      "start_times": [
+        1793797309326605
+      ],
+      "first_start_delay_sec": 0.000346,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797310397746,
+      "start_times": [
+        1793797310397804,
+        1793797313359708
+      ],
+      "first_start_delay_sec": 5.8e-05,
+      "later_start_delays_sec": [
+        2.961904
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797313021055,
+      "start_times": [
+        1793797313021148,
+        1793797313359767
+      ],
+      "first_start_delay_sec": 9.3e-05,
+      "later_start_delays_sec": [
+        0.338619
+      ],
+      "retry_notifications": 2
+    },
+    {
+      "kind": "DDL_DEL_LOB_META",
+      "added": 1793797313359472,
+      "start_times": [
+        1793797313359557
+      ],
+      "first_start_delay_sec": 8.5e-05,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797315286161,
+      "start_times": [
+        1793797315286332
+      ],
+      "first_start_delay_sec": 0.000171,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797315286570,
+      "start_times": [
+        1793797315287313
+      ],
+      "first_start_delay_sec": 0.000743,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797315286657,
+      "start_times": [
+        1793797315287387
+      ],
+      "first_start_delay_sec": 0.00073,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797315286716,
+      "start_times": [
+        1793797315287444
+      ],
+      "first_start_delay_sec": 0.000728,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797315286900,
+      "start_times": [
+        1793797315287484
+      ],
+      "first_start_delay_sec": 0.000584,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797315287158,
+      "start_times": [
+        1793797315287523
+      ],
+      "first_start_delay_sec": 0.000365,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797315310035,
+      "start_times": [
+        1793797315310598
+      ],
+      "first_start_delay_sec": 0.000563,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797315310080,
+      "start_times": [
+        1793797315310667
+      ],
+      "first_start_delay_sec": 0.000587,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797315317707,
+      "start_times": [
+        1793797315318765
+      ],
+      "first_start_delay_sec": 0.001058,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MDS_MINI_MERGE",
+      "added": 1793797321295176,
+      "start_times": [
+        1793797321295433
+      ],
+      "first_start_delay_sec": 0.000257,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    },
+    {
+      "kind": "MINOR_EXECUTE",
+      "added": 1793797321309798,
+      "start_times": [
+        1793797321309904
+      ],
+      "first_start_delay_sec": 0.000106,
+      "later_start_delays_sec": [],
+      "retry_notifications": 0
+    }
+  ],
+  "retries": [
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797289456096,
+      "timestamp": "2026-11-04 21:01:29.456749"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797289456096,
+      "timestamp": "2026-11-04 21:01:29.456829"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797294816645,
+      "timestamp": "2026-11-04 21:01:34.817258"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797294816645,
+      "timestamp": "2026-11-04 21:01:34.817340"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797303157075,
+      "timestamp": "2026-11-04 21:01:43.157636"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797303157075,
+      "timestamp": "2026-11-04 21:01:43.157699"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797306256973,
+      "timestamp": "2026-11-04 21:01:46.257320"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797306256973,
+      "timestamp": "2026-11-04 21:01:46.257416"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797308674942,
+      "timestamp": "2026-11-04 21:01:48.675979"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797308674942,
+      "timestamp": "2026-11-04 21:01:48.676174"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797310397746,
+      "timestamp": "2026-11-04 21:01:50.398519"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797310397746,
+      "timestamp": "2026-11-04 21:01:50.399298"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797313021055,
+      "timestamp": "2026-11-04 21:01:53.021464"
+    },
+    {
+      "kind": "DDL_KV_MERGE",
+      "added": 1793797313021055,
+      "timestamp": "2026-11-04 21:01:53.021537"
+    }
+  ]
+}

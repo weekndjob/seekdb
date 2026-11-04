@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "phase": "final source, build, paired performance and semantics verified",
+  "started": "2026-11-04T20:57:48.298734+08:00",
+  "paired_means": [
+    0.012332613804163289,
+    0.040858333833804966
+  ],
+  "paired_build_gains": [
+    -0.09679348859772634,
+    -0.00017328351100120987
+  ],
+  "updated": "2026-11-04T21:06:15.568525+08:00"
+}

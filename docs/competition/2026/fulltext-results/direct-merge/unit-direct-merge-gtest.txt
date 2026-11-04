@@ -1,0 +1,219 @@
+Running main() from gtest_main.cc
+[==========] Running 66 tests from 27 test cases.
+[----------] Global test environment set-up.
+[----------] 3 tests from CopySandbox
+[ RUN      ] CopySandbox.CommitsQuotedCsvThatCanBeReadBack
+[       OK ] CopySandbox.CommitsQuotedCsvThatCanBeReadBack (2 ms)
+[ RUN      ] CopySandbox.AbortsWithoutLeavingTemporaryFiles
+[       OK ] CopySandbox.AbortsWithoutLeavingTemporaryFiles (0 ms)
+[ RUN      ] CopySandbox.NeverOverwritesAnExistingOrConcurrentlyCreatedTarget
+[       OK ] CopySandbox.NeverOverwritesAnExistingOrConcurrentlyCreatedTarget (1 ms)
+[----------] 3 tests from CopySandbox (3 ms total)
+
+[----------] 5 tests from FileCsvReader
+[ RUN      ] FileCsvReader.SupportsDelimiterEscapeAndExplicitNullText
+[       OK ] FileCsvReader.SupportsDelimiterEscapeAndExplicitNullText (0 ms)
+[ RUN      ] FileCsvReader.RecordsQuotesMultilineAndEmptyFields
+[       OK ] FileCsvReader.RecordsQuotesMultilineAndEmptyFields (0 ms)
+[ RUN      ] FileCsvReader.RejectsMalformedRecordsAndResourceOverflow
+[       OK ] FileCsvReader.RejectsMalformedRecordsAndResourceOverflow (0 ms)
+[ RUN      ] FileCsvReader.PreservesQuotedEmptyAndEnforcesRecordAndColumnLimits
+[       OK ] FileCsvReader.PreservesQuotedEmptyAndEnforcesRecordAndColumnLimits (1 ms)
+[ RUN      ] FileCsvReader.HandlesBomAndShortInputsWithoutLosingBytes
+[       OK ] FileCsvReader.HandlesBomAndShortInputsWithoutLosingBytes (0 ms)
+[----------] 5 tests from FileCsvReader (1 ms total)
+
+[----------] 2 tests from FileSandbox
+[ RUN      ] FileSandbox.RejectsEscapeAndSpecialFiles
+[       OK ] FileSandbox.RejectsEscapeAndSpecialFiles (0 ms)
+[ RUN      ] FileSandbox.DetectsMutationAndPathReplacement
+[       OK ] FileSandbox.DetectsMutationAndPathReplacement (1 ms)
+[----------] 2 tests from FileSandbox (1 ms total)
+
+[----------] 1 test from FileGlobReader
+[ RUN      ] FileGlobReader.DiscoversOnlyAllowedFilesAndCanReopen
+[       OK ] FileGlobReader.DiscoversOnlyAllowedFilesAndCanReopen (0 ms)
+[----------] 1 test from FileGlobReader (0 ms total)
+
+[----------] 3 tests from FileJsonlReader
+[ RUN      ] FileJsonlReader.ReadsScalarsWithExactNullAndStringSemantics
+[       OK ] FileJsonlReader.ReadsScalarsWithExactNullAndStringSemantics (0 ms)
+[ RUN      ] FileJsonlReader.RejectsNestedAmbiguousAndMalformedRecords
+[       OK ] FileJsonlReader.RejectsNestedAmbiguousAndMalformedRecords (1 ms)
+[ RUN      ] FileJsonlReader.EnforcesBoundsAndReadsBom
+[       OK ] FileJsonlReader.EnforcesBoundsAndReadsBom (0 ms)
+[----------] 3 tests from FileJsonlReader (1 ms total)
+
+[----------] 1 test from FileParquetReader
+[ RUN      ] FileParquetReader.ReadsTheOfficialFixtureThroughTheNativeBridge
+[       OK ] FileParquetReader.ReadsTheOfficialFixtureThroughTheNativeBridge (0 ms)
+[----------] 1 test from FileParquetReader (1 ms total)
+
+[----------] 3 tests from FileTableSchema
+[ RUN      ] FileTableSchema.InfersEveryCsvRowAndPersistsMetadata
+[       OK ] FileTableSchema.InfersEveryCsvRowAndPersistsMetadata (0 ms)
+[ RUN      ] FileTableSchema.InfersJsonUnionAndMissingValues
+[       OK ] FileTableSchema.InfersJsonUnionAndMissingValues (0 ms)
+[ RUN      ] FileTableSchema.SupportsHeaderlessCsvAndExplicitNullText
+[       OK ] FileTableSchema.SupportsHeaderlessCsvAndExplicitNullText (0 ms)
+[----------] 3 tests from FileTableSchema (0 ms total)
+
+[----------] 3 tests from FileValueConversion
+[ RUN      ] FileValueConversion.PreservesIntegerBoundariesAndRejectsNonFiniteNumbers
+[       OK ] FileValueConversion.PreservesIntegerBoundariesAndRejectsNonFiniteNumbers (0 ms)
+[ RUN      ] FileValueConversion.ValidatesCalendarAndFractionalTimes
+[       OK ] FileValueConversion.ValidatesCalendarAndFractionalTimes (0 ms)
+[ RUN      ] FileValueConversion.WideningAndNullsKeepValuesConsistent
+[       OK ] FileValueConversion.WideningAndNullsKeepValuesConsistent (0 ms)
+[----------] 3 tests from FileValueConversion (0 ms total)
+
+[----------] 13 tests from AIPromptTest
+[ RUN      ] AIPromptTest.repeats_and_reorders_without_truncation
+[       OK ] AIPromptTest.repeats_and_reorders_without_truncation (0 ms)
+[ RUN      ] AIPromptTest.json_array_object_and_scalars_keep_structure
+[       OK ] AIPromptTest.json_array_object_and_scalars_keep_structure (0 ms)
+[ RUN      ] AIPromptTest.nested_prompts_render_recursively
+[       OK ] AIPromptTest.nested_prompts_render_recursively (0 ms)
+[ RUN      ] AIPromptTest.unicode_escaping_and_embedded_nul_keep_bytes
+[       OK ] AIPromptTest.unicode_escaping_and_embedded_nul_keep_bytes (0 ms)
+[ RUN      ] AIPromptTest.empty_argument_can_produce_empty_result
+[       OK ] AIPromptTest.empty_argument_can_produce_empty_result (0 ms)
+[ RUN      ] AIPromptTest.output_remains_owned_by_caller_allocator
+[       OK ] AIPromptTest.output_remains_owned_by_caller_allocator (0 ms)
+[ RUN      ] AIPromptTest.malformed_shapes_are_rejected_before_casting
+[       OK ] AIPromptTest.malformed_shapes_are_rejected_before_casting (0 ms)
+[ RUN      ] AIPromptTest.invalid_and_overflowing_indices_are_rejected
+[       OK ] AIPromptTest.invalid_and_overflowing_indices_are_rejected (0 ms)
+[ RUN      ] AIPromptTest.recursion_limit_rejects_excessively_nested_prompts
+[       OK ] AIPromptTest.recursion_limit_rejects_excessively_nested_prompts (0 ms)
+[ RUN      ] AIPromptTest.completion_rejects_missing_empty_or_non_string_content
+[       OK ] AIPromptTest.completion_rejects_missing_empty_or_non_string_content (0 ms)
+[ RUN      ] AIPromptTest.completion_forwards_configuration_fields
+[       OK ] AIPromptTest.completion_forwards_configuration_fields (1 ms)
+[ RUN      ] AIPromptTest.embedding_response_maps_indices_and_rejects_invalid_shapes
+[       OK ] AIPromptTest.embedding_response_maps_indices_and_rejects_invalid_shapes (0 ms)
+[ RUN      ] AIPromptTest.ollama_endpoint_and_native_completion_protocol
+[       OK ] AIPromptTest.ollama_endpoint_and_native_completion_protocol (0 ms)
+[----------] 13 tests from AIPromptTest (1 ms total)
+
+[----------] 2 tests from FtsDefaultProperties
+[ RUN      ] FtsDefaultProperties.TypedDefaultsMatchCanonicalJsonForEveryBuiltin
+[       OK ] FtsDefaultProperties.TypedDefaultsMatchCanonicalJsonForEveryBuiltin (0 ms)
+[ RUN      ] FtsDefaultProperties.FailedInitializationAndResetKeepErrorContracts
+[       OK ] FtsDefaultProperties.FailedInitializationAndResetKeepErrorContracts (0 ms)
+[----------] 2 tests from FtsDefaultProperties (0 ms total)
+
+[----------] 1 test from FtsDictionaryPlacement
+[ RUN      ] FtsDictionaryPlacement.DenseBranchesPreserveEveryWordAndMissingEdge
+[       OK ] FtsDictionaryPlacement.DenseBranchesPreserveEveryWordAndMissingEdge (4 ms)
+[----------] 1 test from FtsDictionaryPlacement (4 ms total)
+
+[----------] 2 tests from FtsRangeDictionary
+[ RUN      ] FtsRangeDictionary.BinaryBoundariesPreserveLegacySelection
+[       OK ] FtsRangeDictionary.BinaryBoundariesPreserveLegacySelection (0 ms)
+[ RUN      ] FtsRangeDictionary.ReleasesOnlyOwnAllocationsIncludingFailurePaths
+[       OK ] FtsRangeDictionary.ReleasesOnlyOwnAllocationsIncludingFailurePaths (0 ms)
+[----------] 2 tests from FtsRangeDictionary (0 ms total)
+
+[----------] 1 test from FtsParserLifecycle
+[ RUN      ] FtsParserLifecycle.RepeatedCleanupAfterPartialInitialization
+[       OK ] FtsParserLifecycle.RepeatedCleanupAfterPartialInitialization (0 ms)
+[----------] 1 test from FtsParserLifecycle (0 ms total)
+
+[----------] 1 test from FtsArbitration
+[ RUN      ] FtsArbitration.ManyOrderedChainsAndOverlappingAlternatives
+[       OK ] FtsArbitration.ManyOrderedChainsAndOverlappingAlternatives (0 ms)
+[----------] 1 test from FtsArbitration (0 ms total)
+
+[----------] 2 tests from FtsGrouping
+[ RUN      ] FtsGrouping.KeepsLegacyFrequencyAndLastEquivalentWordRepresentation
+[       OK ] FtsGrouping.KeepsLegacyFrequencyAndLastEquivalentWordRepresentation (0 ms)
+[ RUN      ] FtsGrouping.ConcurrentDocumentsKeepIndependentCountsAndReuse
+[       OK ] FtsGrouping.ConcurrentDocumentsKeepIndependentCountsAndReuse (1 ms)
+[----------] 2 tests from FtsGrouping (1 ms total)
+
+[----------] 3 tests from FtsEnglishNormalization
+[ RUN      ] FtsEnglishNormalization.ParserTokensSurviveAdvanceAndResetWithoutSecondCopy
+[       OK ] FtsEnglishNormalization.ParserTokensSurviveAdvanceAndResetWithoutSecondCopy (0 ms)
+[ RUN      ] FtsEnglishNormalization.CallerAllocationFailureDoesNotResetCallerStorage
+[       OK ] FtsEnglishNormalization.CallerAllocationFailureDoesNotResetCallerStorage (0 ms)
+[ RUN      ] FtsEnglishNormalization.LowercaseUppercaseAndUnicodeAcrossDocuments
+[       OK ] FtsEnglishNormalization.LowercaseUppercaseAndUnicodeAcrossDocuments (0 ms)
+[----------] 3 tests from FtsEnglishNormalization (0 ms total)
+
+[----------] 1 test from FtsDaatMerge
+[ RUN      ] FtsDaatMerge.SmallAndLargeMergersPreserveWeightedUnionAndEndOfInput
+[       OK ] FtsDaatMerge.SmallAndLargeMergersPreserveWeightedUnionAndEndOfInput (1 ms)
+[----------] 1 test from FtsDaatMerge (1 ms total)
+
+[----------] 2 tests from FtsDocumentIdComparison
+[ RUN      ] FtsDocumentIdComparison.BinaryFastPathIsEquivalentToOriginalComparator
+[       OK ] FtsDocumentIdComparison.BinaryFastPathIsEquivalentToOriginalComparator (0 ms)
+[ RUN      ] FtsDocumentIdComparison.BlockMaxBoundsAndReset
+[       OK ] FtsDocumentIdComparison.BlockMaxBoundsAndReset (0 ms)
+[----------] 2 tests from FtsDocumentIdComparison (0 ms total)
+
+[----------] 2 tests from IkCharacterClassification
+[ RUN      ] IkCharacterClassification.Utf8AndUtf16Boundaries
+[       OK ] IkCharacterClassification.Utf8AndUtf16Boundaries (0 ms)
+[ RUN      ] IkCharacterClassification.InvalidAndTruncatedUtf8KeepsErrorBehavior
+[       OK ] IkCharacterClassification.InvalidAndTruncatedUtf8KeepsErrorBehavior (0 ms)
+[----------] 2 tests from IkCharacterClassification (0 ms total)
+
+[----------] 1 test from FtsStopWords
+[ RUN      ] FtsStopWords.PreservesStopwordCollationAcrossInputCollations
+[       OK ] FtsStopWords.PreservesStopwordCollationAcrossInputCollations (0 ms)
+[----------] 1 test from FtsStopWords (0 ms total)
+
+[----------] 3 tests from AiColumnParser
+[ RUN      ] AiColumnParser.CreatesAndAltersWithoutChangingOrdinaryColumns
+[       OK ] AiColumnParser.CreatesAndAltersWithoutChangingOrdinaryColumns (1 ms)
+[ RUN      ] AiColumnParser.RetryUsesNativeUpdateAndPreservesParameterCount
+[       OK ] AiColumnParser.RetryUsesNativeUpdateAndPreservesParameterCount (0 ms)
+[ RUN      ] AiColumnParser.ShowsAiMetadataAndRetainsOrdinaryColumnFlags
+[       OK ] AiColumnParser.ShowsAiMetadataAndRetainsOrdinaryColumnFlags (0 ms)
+[----------] 3 tests from AiColumnParser (1 ms total)
+
+[----------] 3 tests from FileSqlParser
+[ RUN      ] FileSqlParser.ReadsFormatsOptionsAliasesAndNativeJoins
+[       OK ] FileSqlParser.ReadsFormatsOptionsAliasesAndNativeJoins (0 ms)
+[ RUN      ] FileSqlParser.RejectsPositionalOptionsAndIncompleteSyntax
+[       OK ] FileSqlParser.RejectsPositionalOptionsAndIncompleteSyntax (0 ms)
+[ RUN      ] FileSqlParser.DistinguishesDescribeFromExplainAndLowersCopyToNativeInto
+[       OK ] FileSqlParser.DistinguishesDescribeFromExplainAndLowersCopyToNativeInto (0 ms)
+[----------] 3 tests from FileSqlParser (0 ms total)
+
+[----------] 1 test from FileColumnNamespace
+[ RUN      ] FileColumnNamespace.FindsDynamicColumnsWithoutTreatingThePathAsAFunction
+[       OK ] FileColumnNamespace.FindsDynamicColumnsWithoutTreatingThePathAsAFunction (0 ms)
+[----------] 1 test from FileColumnNamespace (0 ms total)
+
+[----------] 2 tests from FileTableCopy
+[ RUN      ] FileTableCopy.KeepsOrdinaryTablesSafeWithDefaultAllocator
+[       OK ] FileTableCopy.KeepsOrdinaryTablesSafeWithDefaultAllocator (0 ms)
+[ RUN      ] FileTableCopy.OwnsMetadataWhenTheOptionalAllocatorIsOmitted
+[       OK ] FileTableCopy.OwnsMetadataWhenTheOptionalAllocatorIsOmitted (0 ms)
+[----------] 2 tests from FileTableCopy (0 ms total)
+
+[----------] 1 test from SecureFilePath
+[ RUN      ] SecureFilePath.RejectsMissingDirectoryAndPrefixSibling
+[       OK ] SecureFilePath.RejectsMissingDirectoryAndPrefixSibling (0 ms)
+[----------] 1 test from SecureFilePath (0 ms total)
+
+[----------] 1 test from FileSqlVariable
+[ RUN      ] FileSqlVariable.RegistryIsCompleteAndDisabledByDefault
+[       OK ] FileSqlVariable.RegistryIsCompleteAndDisabledByDefault (0 ms)
+[----------] 1 test from FileSqlVariable (0 ms total)
+
+[----------] 3 tests from AiColumnSchema
+[ RUN      ] AiColumnSchema.PacketBoundsVersionsAndDependencyPairs
+[       OK ] AiColumnSchema.PacketBoundsVersionsAndDependencyPairs (0 ms)
+[ RUN      ] AiColumnSchema.ColumnOwnsPacketAndCopySurvivesSourceReuse
+[       OK ] AiColumnSchema.ColumnOwnsPacketAndCopySurvivesSourceReuse (0 ms)
+[ RUN      ] AiColumnSchema.FinalIdsAndHiddenColumnsAreAllocatedAfterAlterRemapping
+[       OK ] AiColumnSchema.FinalIdsAndHiddenColumnsAreAllocatedAfterAlterRemapping (0 ms)
+[----------] 3 tests from AiColumnSchema (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 66 tests from 27 test cases ran. (15 ms total)
+[  PASSED  ] 66 tests.

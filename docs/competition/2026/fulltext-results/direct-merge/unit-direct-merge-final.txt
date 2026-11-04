@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /home/liuzaho/seekdb-workspace/seekdb-2026/build_release
+Test project /home/liuzaho/seekdb-workspace/seekdb-2026/build_release
+    Start 1: sql_tests
+1/1 Test #1: sql_tests ........................   Passed    0.24 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.24 sec

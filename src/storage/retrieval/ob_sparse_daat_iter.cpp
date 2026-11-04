@@ -23,6 +23,26 @@ namespace oceanbase
 namespace storage
 {
 
+namespace
+{
+// init_merge_heap selects this concrete implementation for at most three
+// dimensions. Qualified calls let its small operations inline without changing
+// the comparison, tie order, equality markers or relevance collection.
+class FtsSimpleMergeAccess
+{
+public:
+  explicit FtsSimpleMergeAccess(ObSRSimpleMerger &heap) : heap_(heap) {}
+  bool empty() const { return heap_.ObSRSimpleMerger::empty(); }
+  bool is_unique_champion() const { return heap_.ObSRSimpleMerger::is_unique_champion(); }
+  int push(const ObSRMergeItem &item) { return heap_.ObSRSimpleMerger::push(item); }
+  int rebuild() { return heap_.ObSRSimpleMerger::rebuild(); }
+  int top(const ObSRMergeItem *&item) { return heap_.ObSRSimpleMerger::top(item); }
+  int pop() { return heap_.ObSRSimpleMerger::pop(); }
+private:
+  ObSRSimpleMerger &heap_;
+};
+}
+
 ObSRMergeCmp::ObSRMergeCmp()
   : cmp_func_(nullptr),
     iter_ids_(nullptr),
@@ -295,72 +315,88 @@ int ObSRDaaTIterImpl::do_one_merge_round(int64_t &count)
 
 int ObSRDaaTIterImpl::fill_merge_heap()
 {
-  int ret = OB_SUCCESS;
-  ObSRMergeItem item;
-  for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
-    const int64_t iter_idx = next_round_iter_idxes_[i];
-    ObISRDaaTDimIter *dim_iter = nullptr;
-    if (OB_ISNULL(dim_iter = dim_iters_->at(iter_idx))) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(dim_iter->get_next_row())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("fail to try load next batch dimension data", K(ret));\
+  auto merge = [&](auto &heap) -> int {
+    int ret = OB_SUCCESS;
+    ObSRMergeItem item;
+    for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
+      const int64_t iter_idx = next_round_iter_idxes_[i];
+      ObISRDaaTDimIter *dim_iter = nullptr;
+      if (OB_ISNULL(dim_iter = dim_iters_->at(iter_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(dim_iter->get_next_row())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to try load next batch dimension data", K(ret));\
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(dim_iter->get_curr_score(item.relevance_))) {
+      } else if (OB_NOT_NULL(iter_param_->dim_weights_) && FALSE_IT(item.relevance_ = item.relevance_ * iter_param_->field_boost_ * iter_param_->dim_weights_->at(iter_idx))) {
+      } else if (OB_FAIL(dim_iter->get_curr_id(iter_domain_ids_[iter_idx]))) {
+      } else if (FALSE_IT(item.iter_idx_ = iter_idx)) {
+      } else if (OB_FAIL(heap.push(item))) {
       } else {
-        ret = OB_SUCCESS;
+        LOG_DEBUG("push item to merge heap", K(ret), K(i), K(iter_idx), K(next_round_cnt_), K(item), K(iter_domain_ids_[iter_idx]));
       }
-    } else if (OB_FAIL(dim_iter->get_curr_score(item.relevance_))) {
-    } else if (OB_NOT_NULL(iter_param_->dim_weights_) && FALSE_IT(item.relevance_ = item.relevance_ * iter_param_->field_boost_ * iter_param_->dim_weights_->at(iter_idx))) {
-    } else if (OB_FAIL(dim_iter->get_curr_id(iter_domain_ids_[iter_idx]))) {
-    } else if (FALSE_IT(item.iter_idx_ = iter_idx)) {
-    } else if (OB_FAIL(merge_heap_->push(item))) {
-    } else {
-      LOG_DEBUG("push item to merge heap", K(ret), K(i), K(iter_idx), K(next_round_cnt_), K(item), K(iter_domain_ids_[iter_idx]));
     }
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if (merge_heap_->empty()) {
-    ret = OB_ITER_END;
-  } else if (0 != next_round_cnt_ && OB_FAIL(merge_heap_->rebuild())) {
+    if (OB_FAIL(ret)) {
+    } else if (heap.empty()) {
+      ret = OB_ITER_END;
+    } else if (0 != next_round_cnt_ && OB_FAIL(heap.rebuild())) {
+    } else {
+      next_round_cnt_ = 0;
+    }
+    return ret;
+  };
+  if (dim_iters_->count() <= ObSRSimpleMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT) {
+    FtsSimpleMergeAccess heap(*static_cast<ObSRSimpleMerger *>(merge_heap_));
+    return merge(heap);
   } else {
-    next_round_cnt_ = 0;
+    return merge(*merge_heap_);
   }
-  return ret;
 }
 
 int ObSRDaaTIterImpl::collect_dims_by_id(const ObDatum *&id_datum, double &relevance, bool &got_valid_id)
 {
-  int ret = OB_SUCCESS;
+  auto merge = [&](auto &heap) -> int {
+    int ret = OB_SUCCESS;
 
-  const ObSRMergeItem *top_item = nullptr;
-  bool curr_doc_end = false;
-  int64_t iter_idx = 0;
-  relevance = 0.0;
-  got_valid_id = false;
+    const ObSRMergeItem *top_item = nullptr;
+    bool curr_doc_end = false;
+    int64_t iter_idx = 0;
+    relevance = 0.0;
+    got_valid_id = false;
 
-  while (OB_SUCC(ret) && !merge_heap_->empty() && !curr_doc_end) {
-    if (merge_heap_->is_unique_champion()) {
-      curr_doc_end = true;
+    while (OB_SUCC(ret) && !heap.empty() && !curr_doc_end) {
+      if (heap.is_unique_champion()) {
+        curr_doc_end = true;
+      }
+      if (OB_FAIL(heap.top(top_item))) {
+      } else if (OB_FAIL(relevance_collector_->collect_one_dim(top_item->iter_idx_, top_item->relevance_))) {
+      } else if (FALSE_IT(iter_idx = top_item->iter_idx_)) {
+      } else if (OB_FAIL(heap.pop())) {
+      } else {
+        next_round_iter_idxes_[next_round_cnt_++] = iter_idx;
+      }
     }
-    if (OB_FAIL(merge_heap_->top(top_item))) {
-    } else if (OB_FAIL(relevance_collector_->collect_one_dim(top_item->iter_idx_, top_item->relevance_))) {
-    } else if (FALSE_IT(iter_idx = top_item->iter_idx_)) {
-    } else if (OB_FAIL(merge_heap_->pop())) {
-    } else {
-      next_round_iter_idxes_[next_round_cnt_++] = iter_idx;
+
+    if (OB_SUCC(ret)) {
+      id_datum = iter_domain_ids_[iter_idx];
+      if (OB_ISNULL(id_datum)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(relevance_collector_->get_result(relevance, got_valid_id))) {
+      } else if (got_valid_id && OB_FAIL(process_collected_row(*id_datum, relevance))) {
+      }
     }
+
+    return ret;
+  };
+  if (dim_iters_->count() <= ObSRSimpleMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT) {
+    FtsSimpleMergeAccess heap(*static_cast<ObSRSimpleMerger *>(merge_heap_));
+    return merge(heap);
+  } else {
+    return merge(*merge_heap_);
   }
-
-  if (OB_SUCC(ret)) {
-    id_datum = iter_domain_ids_[iter_idx];
-    if (OB_ISNULL(id_datum)) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(relevance_collector_->get_result(relevance, got_valid_id))) {
-    } else if (got_valid_id && OB_FAIL(process_collected_row(*id_datum, relevance))) {
-    }
-  }
-
-  return ret;
 }
 
 int ObSRDaaTIterImpl::process_collected_row(const ObDatum &id_datum, const double relevance)

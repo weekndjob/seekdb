@@ -1,0 +1,74 @@
+{
+  "started": "2026-11-04T21:03:11.881194+08:00",
+  "status": "passed",
+  "checks": [
+    {
+      "script": "capture-fts-correctness.py",
+      "label": "before-direct-merge",
+      "status": "passed"
+    },
+    {
+      "script": "capture-fts-correctness.py",
+      "label": "after-direct-merge",
+      "status": "passed"
+    },
+    {
+      "script": "capture-parallel-fts.py",
+      "label": "before-direct-merge",
+      "status": "passed"
+    },
+    {
+      "script": "capture-parallel-fts.py",
+      "label": "after-direct-merge",
+      "status": "passed"
+    },
+    {
+      "snapshot": "correctness",
+      "sha256": "45cae833284be28c7f423245487c8e99fc3f763cbaa76013473002348a8a6049",
+      "identical": true
+    },
+    {
+      "snapshot": "parallel-correctness",
+      "sha256": "1ce121deef541446d089bcc0a84f182eef58c7b2e9708be80a04e5ab8b58e430",
+      "identical": true
+    },
+    {
+      "script": "verify-fts-official.py",
+      "status": "passed"
+    },
+    {
+      "script": "run-ddl-concurrency.py",
+      "status": "passed"
+    }
+  ],
+  "source": {
+    "src/data_plane/api/data_plane/fts/ob_fts_parser_helper.h": "31597e492b1943b7ee6a76c8df6a83f5a01c9b030b16f794780e78b7a827b07d",
+    "src/data_plane/api/data_plane/fts/ob_fts_struct.h": "ca8805b2f32adaea4819102a72e29c0d2246295b59a7ec578a5bd9782c92ed8b",
+    "src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp": "476eff31bed4f4377f8e833d542d65f7307cae37fbd58df127770a7a9d2b69ef",
+    "src/share/text_analysis/ob_text_analyzer.cpp": "abd1cda4070486469946a86edcbd992dd85228729a9a52960cd4a5e146d308ca",
+    "src/share/text_analysis/ob_text_analyzer.h": "7f2478b683129c63d8f31c5caf897028ab07b3cb6bf9cc64fef0b150108f68c9",
+    "src/share/text_analysis/ob_token_stream.cpp": "9aeed68dedbd8687f074a1be46586a667f857752996e8fbfa1008fd5d6e721fe",
+    "src/share/text_analysis/ob_token_stream.h": "9ba7021f48bd967825213f79b51765f930d6440dc434b08b307b932fea34c81f",
+    "src/sql/das/iter/ob_das_text_retrieval_merge_iter.cpp": "f7e452cb4c20a044b6d00a0547213919b7523b8d152b1f4d18858a724913bf5d",
+    "src/sql/engine/expr/ob_expr_tokenize.cpp": "22b0f8e60c7957a10eb9e1ef4e17eb2e0cf0e407996fe244f2b21911b30ef04c",
+    "src/sql/engine/expr/ob_expr_tokenize.h": "154c92415f94f09b95e7afe933ae963da3a85133af38a60f1945ffcb37e11476",
+    "src/sql/optimizer/ob_join_order.cpp": "6f9b14b2d65943fe70564cad070489add216c87cc4e47049a8351a556a53e1dc",
+    "src/storage/fts/dict/ob_ft_dat_dict.cpp": "0f197cc904c658f23c5b324269e87239e4eb342ad22e47b59b6a6c252cbbaea9",
+    "src/storage/fts/dict/ob_ft_range_dict.cpp": "8e016e92db25e141916a3c32fc75eb366842d26e286308660257240fe1d21e61",
+    "src/storage/fts/dict/ob_ft_range_dict.h": "cea4913a9ab67c1d9bbdacef7e8e7ef8a7109673de03bc9774f68b7b5f9fcacc",
+    "src/storage/fts/ik/ob_ik_arbitrator.cpp": "7e7e1d01ab454e8b2206533803008974507edb1fbba2ebb13bf7fb71d881c7ad",
+    "src/storage/fts/ik/ob_ik_arbitrator.h": "fc751a1938ce35b3081c912a94fa6b342e2ddf1ad81f0ec080e20f23cdb2dee5",
+    "src/storage/fts/ob_beng_ft_parser.cpp": "5cce3b8f6d3e6b499bf2f7077dc3e21f529d3f8ca7cee1fa37a7a1d6a5987702",
+    "src/storage/fts/ob_fts_parser_helper.cpp": "e22f2f54808a187ff2ba7685fb83f27609bea9db23ea68c93117502e98d9c6a9",
+    "src/storage/fts/ob_fts_stop_word.cpp": "d50b1f1ee56c9650233e7fac7f58c2ead0cf55755c5064221bed965c0a80a9fc",
+    "src/storage/fts/ob_ik_ft_parser.cpp": "00964d330fdafc12954c0de04cd340a12ae00495288ac801edd980c0170904fb",
+    "src/storage/fts/ob_ik_ft_parser.h": "9d5a5935041cf7dacd33536e9a1ca97f2307de2865e19fab80f66af2a8a24e36",
+    "src/storage/retrieval/ob_sparse_daat_iter.cpp": "f71f6b65151515126af7c53c3e83ca66e3f6ff4ab8e5542e180faf980ebce130",
+    "src/storage/retrieval/ob_sparse_daat_iter.h": "ff620569554b492860eba1636652b5441e2b8d5d93debd64b1aab525b7f27d85",
+    "src/storage/retrieval/ob_sparse_retrieval_util.h": "3f14dcf5d74ef55561857b59649551fc9976cc67a678deeb0df255c779a80129",
+    "unittest/sql/fts/test_fts_allocation_and_normalization.cpp": "440af2db64223f499eaf9a91bdc88bac297eff559dc431180a1f86019b360ad0"
+  },
+  "baseline_sha256": "61ec96fef2fc84972e643e838b0cd6961c6333efcce7e8aaf79c28e0452b1152",
+  "candidate_sha256": "b9175fc49b3b2c3436b77ccfcf99adcbb956f20b81612b38a56a79bd28feacdc",
+  "finished": "2026-11-04T21:06:15.562281+08:00"
+}

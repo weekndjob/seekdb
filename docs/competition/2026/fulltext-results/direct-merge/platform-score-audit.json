@@ -1,0 +1,27 @@
+{
+  "submitted_commit": "05e4778e16ca701cd37cdb36bc95e4691d46e570",
+  "official_url": "https://oceanbase.yuque.com/org-wiki-obtech-vh7w9r/hc3pio/za7cfo5cazcrihhq",
+  "official_page_sha256": "6af37dda507ffd5e6fb4a803450e3c82ae7a280ddda90c1c94e3eee44f4ae6f6",
+  "platform_mean_improvement": -0.043577334368957145,
+  "formula_score": 0,
+  "reason_for_zero": "Negative category-weighted improvement is clipped to zero. Successful execution alone does not satisfy a positive performance score.",
+  "platform_fixed_baseline": "Not provided. Cannot uniquely derive nine baseline values from one aggregate score.",
+  "checked_in_july_reference_only": {
+    "categories": {
+      "build": 0.691112950274056,
+      "tokenize": 0.9131348781741755,
+      "query": 0.920855617805111
+    },
+    "mean_improvement": 0.8417011487511141,
+    "score": 100.0
+  },
+  "conclusion": "Checked-in July baseline cannot reproduce platform aggregate. Do not claim an official pass or score using it.",
+  "not_directly_scored": [
+    "git_dirty",
+    "build_total_sec",
+    "select1_avg_ms",
+    "raw_load_sec",
+    "query_*_hits"
+  ],
+  "correctness": "Expected hit counts match, but full token/output and concurrency checks are also required."
+}
