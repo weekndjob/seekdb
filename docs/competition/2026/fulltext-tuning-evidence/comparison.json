@@ -1,0 +1,79 @@
+{
+  "score": 7.569774518688084,
+  "mean_improvement": 0.03784887259344042,
+  "full_score_improvement": 0.5,
+  "categories": {
+    "build": {
+      "improvement": 0.009314954040914166,
+      "metrics": [
+        {
+          "metric": "build_ik_all_sec",
+          "baseline": 4.8420000000000005,
+          "current": 4.841,
+          "improvement": 0.00020652622883113048
+        },
+        {
+          "metric": "build_ik_content_sec",
+          "baseline": 3.725,
+          "current": 3.724,
+          "improvement": 0.0002684563758388966
+        },
+        {
+          "metric": "build_beng_en_sec",
+          "baseline": 2.075,
+          "current": 2.018,
+          "improvement": 0.027469879518072473
+        }
+      ]
+    },
+    "tokenize": {
+      "improvement": 0.002819548872180399,
+      "metrics": [
+        {
+          "metric": "tokenize_ik_avg_ms",
+          "baseline": 0.0532,
+          "current": 0.0503,
+          "improvement": 0.05451127819548872
+        },
+        {
+          "metric": "tokenize_beng_avg_ms",
+          "baseline": 0.0266,
+          "current": 0.0279,
+          "improvement": -0.04887218045112792
+        }
+      ]
+    },
+    "query": {
+      "improvement": 0.10141211486722669,
+      "metrics": [
+        {
+          "metric": "query_cn_avg_ms",
+          "baseline": 0.9501,
+          "current": 0.7969,
+          "improvement": 0.161246184612146
+        },
+        {
+          "metric": "query_beng_avg_ms",
+          "baseline": 1.4282,
+          "current": 1.257,
+          "improvement": 0.11987116650329088
+        },
+        {
+          "metric": "query_mixed_avg_ms",
+          "baseline": 1.0820500000000002,
+          "current": 0.9395,
+          "improvement": 0.13174067741786438
+        },
+        {
+          "metric": "query_limit_avg_ms",
+          "baseline": 1.2206000000000001,
+          "current": 1.2294,
+          "improvement": -0.007209569064394493
+        }
+      ]
+    }
+  },
+  "comparison": "final-candidate against mean of adjacent official baseline runs",
+  "official_source": "5bce9e06d1281347ad61344e4b01fab9158c58a2",
+  "platform_score_prediction": false
+}

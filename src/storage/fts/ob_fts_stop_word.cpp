@@ -76,12 +76,27 @@ int ObStopWordChecker::check_stopword(const ObFTWord &word, bool &is_stopword)
   int ret = OB_SUCCESS;
   
   
-  common::ObArenaAllocator allocator(lib::ObMemAttr("ChkStopWord"));
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(word.empty())) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (ObCharset::is_valid_collation(word.get_collation_type())
+      && ObCharset::charset_type_by_coll(word.get_collation_type())
+          == ObCharset::charset_type_by_coll(stopword_type_.get_collation_type())) {
+    // charset_convert aliases input for matching charsets with default flags.
+    // Avoid constructing a per-token arena on this common path, while still
+    // comparing with the stopword set's collation rather than the input's.
+    ObFTWord converted(word.get_word().get_string().length(),
+        word.get_word().get_string().ptr(), stopword_type_);
+    ret = stopword_set_.exist_refactored(converted);
+    if (ret == OB_HASH_EXIST || ret == OB_HASH_NOT_EXIST) {
+      is_stopword = ret == OB_HASH_EXIST;
+      ret = OB_SUCCESS;
+    } else if (OB_SUCC(ret)) {
+      ret = OB_ERR_UNEXPECTED;
+    }
   } else {
+    common::ObArenaAllocator allocator(lib::ObMemAttr("ChkStopWord"));
     common::ObString cmp_str;
     // do nothing set out with in if type is the same.
     if (OB_FAIL(common::ObCharset::charset_convert(
@@ -198,20 +213,17 @@ int ObAddWord::check_stopword(const ObFTWord &ft_word, bool &is_stopword)
 int ObAddWord::groupby_word(const ObFTWord &word, const int64_t word_freq)
 {
   int ret = OB_SUCCESS;
-  int64_t word_count = 0;
   if (OB_UNLIKELY(word.empty() || word_freq <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (!flag_.groupby_word()) {
     if (OB_FAIL(word_map_.set_refactored(word, 1/*word count*/))) {
     }
-  } else if (OB_FAIL(word_map_.get_refactored(word, word_count)) && OB_HASH_NOT_EXIST != ret) {
   } else {
-    if (OB_HASH_NOT_EXIST == ret) {
-      word_count = 1;
-    } else {
-      word_count += word_freq;
-    }
-    if (OB_FAIL(word_map_.set_refactored(word, word_count, 1/*overwrite*/))) {
+    // Keep the first occurrence's count and key exactly as before. For an
+    // existing word, update its count under one bucket lookup instead of
+    // hashing and comparing the same collation-aware key a second time.
+    auto add_frequency = [word_freq](auto &entry) { entry.second += word_freq; };
+    if (OB_FAIL(word_map_.set_or_update(word, 1/*first occurrence*/, add_frequency))) {
     }
   }
   return ret;

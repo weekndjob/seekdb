@@ -1,0 +1,27 @@
+Running main() from gtest_main.cc
+[==========] Running 6 tests from 3 test cases.
+[----------] Global test environment set-up.
+[----------] 3 tests from FtsWordAggregation
+[ RUN      ] FtsWordAggregation.PreservesFirstOccurrenceAndParserFrequencies
+[       OK ] FtsWordAggregation.PreservesFirstOccurrenceAndParserFrequencies (0 ms)
+[ RUN      ] FtsWordAggregation.KeepsCollationEquivalenceAndDistinctWords
+[       OK ] FtsWordAggregation.KeepsCollationEquivalenceAndDistinctWords (0 ms)
+[ RUN      ] FtsWordAggregation.PreservesNoGroupingDuplicateError
+[       OK ] FtsWordAggregation.PreservesNoGroupingDuplicateError (0 ms)
+[----------] 3 tests from FtsWordAggregation (0 ms total)
+
+[----------] 2 tests from IkCharacterClassification
+[ RUN      ] IkCharacterClassification.Utf8AndUtf16Boundaries
+[       OK ] IkCharacterClassification.Utf8AndUtf16Boundaries (0 ms)
+[ RUN      ] IkCharacterClassification.InvalidAndTruncatedUtf8KeepsErrorBehavior
+[       OK ] IkCharacterClassification.InvalidAndTruncatedUtf8KeepsErrorBehavior (0 ms)
+[----------] 2 tests from IkCharacterClassification (0 ms total)
+
+[----------] 1 test from FtsStopWords
+[ RUN      ] FtsStopWords.PreservesStopwordCollationAcrossInputCollations
+[       OK ] FtsStopWords.PreservesStopwordCollationAcrossInputCollations (0 ms)
+[----------] 1 test from FtsStopWords (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 3 test cases ran. (0 ms total)
+[  PASSED  ] 6 tests.

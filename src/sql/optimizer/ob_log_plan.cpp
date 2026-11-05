@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "config_bridge.h"
 #include "ob_log_plan.h"
+#include "sql/optimizer/ob_fts_score_utils.h"
 #include "sql/optimizer/ob_pwj_comparer.h"
 #include "sql/optimizer/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_log_table_scan.h"
@@ -12270,6 +12271,11 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
     tr_info.rowkey_idx_tid_ = rowkey_doc_tid;
     tr_info.data_table_id_ = ref_table_id;
     tr_info.pushdown_match_filter_ = nullptr;
+    if (get_stmt()->is_select_stmt()
+        && can_omit_fts_score_for_count(*static_cast<const ObSelectStmt *>(get_stmt()),
+                                        *match_against)) {
+      need_calc_relevance = false;
+    }
     tr_info.need_calc_relevance_ = need_calc_relevance;
   }
   return ret;

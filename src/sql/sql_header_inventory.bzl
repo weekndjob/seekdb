@@ -308,6 +308,7 @@ SQL_INTERFACE_CLOSURE_HEADERS = [
     "optimizer/ob_conflict_detector.h",
     "optimizer/ob_dynamic_sampling.h",
     "optimizer/ob_fd_item.h",
+    "optimizer/ob_fts_score_utils.h",
     "optimizer/ob_index_info_cache.h",
     "optimizer/ob_join_order.h",
     "optimizer/ob_log_operator_factory.h",

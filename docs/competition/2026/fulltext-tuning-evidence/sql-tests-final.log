@@ -1,0 +1,17 @@
+Running main() from gtest_main.cc
+[==========] Running 4 tests from 1 test case.
+[----------] Global test environment set-up.
+[----------] 4 tests from FtsScoreElision
+[ RUN      ] FtsScoreElision.BareCountConsumesMembershipOnly
+[       OK ] FtsScoreElision.BareCountConsumesMembershipOnly (0 ms)
+[ RUN      ] FtsScoreElision.ThresholdsAndOtherConditionsKeepScores
+[       OK ] FtsScoreElision.ThresholdsAndOtherConditionsKeepScores (1 ms)
+[ RUN      ] FtsScoreElision.ProjectionGroupingAndRankingKeepScores
+[       OK ] FtsScoreElision.ProjectionGroupingAndRankingKeepScores (0 ms)
+[ RUN      ] FtsScoreElision.BooleanAndBoostedSearchKeepScores
+[       OK ] FtsScoreElision.BooleanAndBoostedSearchKeepScores (0 ms)
+[----------] 4 tests from FtsScoreElision (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 1 test case ran. (1 ms total)
+[  PASSED  ] 4 tests.
